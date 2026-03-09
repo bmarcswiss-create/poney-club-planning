@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Calendar as CalendarIcon, MapPin, Award, Trash2, X, Plus, AlertCircle, Users, Tent, ChevronLeft, ChevronRight, Settings, Edit, Flag, StickyNote } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
-// --- CONNEXION À TA BASE DE DONNÉES SUPABASE ---
+// --- CONNEXION À SUPABASE ---
 const supabaseUrl = 'https://lnwvlyswsmtafyoepovq.supabase.co';
 const supabaseKey = 'sb_publishable_azT_rAkqeE-zsnvolYSY9w_7MtlnBVI';
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -16,34 +16,6 @@ const defaultEquipe = [
   { id: 4, nom: "Julie", role: "Monitrice", total: 0, repos: "" },
 ];
 
-const evenementsInitiaux = {
-  '2026-01-01': { id: 'jf_1', type: 'jour_ferie', titre: 'Nouvel An' },
-  '2026-04-03': { id: 'jf_2', type: 'jour_ferie', titre: 'Vendredi Saint' },
-  '2026-04-06': { id: 'jf_3', type: 'jour_ferie', titre: 'Lundi de Pâques' },
-  '2026-05-14': { id: 'jf_4', type: 'jour_ferie', titre: 'Ascension' },
-  '2026-05-25': { id: 'jf_5', type: 'jour_ferie', titre: 'Lundi de Pentecôte' },
-  '2026-08-01': { id: 'jf_6', type: 'jour_ferie', titre: 'Fête Nationale' },
-  '2026-09-10': { id: 'jf_7', type: 'jour_ferie', titre: 'Jeûne Genevois' },
-  '2026-12-25': { id: 'jf_8', type: 'jour_ferie', titre: 'Noël' },
-  '2026-12-31': { id: 'jf_9', type: 'jour_ferie', titre: 'Restauration' },
-  '2026-02-16': { id: 'vge_1', type: 'vacances_ge', titre: 'Relâches GE' },
-  '2026-02-17': { id: 'vge_2', type: 'vacances_ge', titre: 'Relâches GE' },
-  '2026-02-18': { id: 'vge_3', type: 'vacances_ge', titre: 'Relâches GE' },
-  '2026-02-19': { id: 'vge_4', type: 'vacances_ge', titre: 'Relâches GE' },
-  '2026-02-20': { id: 'vge_5', type: 'vacances_ge', titre: 'Relâches GE' },
-  '2026-04-07': { id: 'vge_6', type: 'vacances_ge', titre: 'Vacances Pâques' },
-  '2026-04-08': { id: 'vge_7', type: 'vacances_ge', titre: 'Vacances Pâques' },
-  '2026-04-09': { id: 'vge_8', type: 'vacances_ge', titre: 'Vacances Pâques' },
-  '2026-04-10': { id: 'vge_9', type: 'vacances_ge', titre: 'Vacances Pâques' },
-  '2026-04-13': { id: 'vge_10', type: 'vacances_ge', titre: 'Vacances Pâques' },
-  '2026-04-14': { id: 'vge_11', type: 'vacances_ge', titre: 'Vacances Pâques' },
-  '2026-04-15': { id: 'vge_12', type: 'vacances_ge', titre: 'Vacances Pâques' },
-  '2026-04-16': { id: 'vge_13', type: 'vacances_ge', titre: 'Vacances Pâques' },
-  '2026-04-17': { id: 'vge_14', type: 'vacances_ge', titre: 'Vacances Pâques' },
-  '2026-06-29': { id: 'vge_15', type: 'vacances_ge', titre: 'Vacances Été' },
-  '2026-06-30': { id: 'vge_16', type: 'vacances_ge', titre: 'Vacances Été' },
-};
-
 const moisNoms = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
 const rolesDisponibles = ["Palefrenier", "Apprentie", "Stagiaire", "Monitrice", "Aide WE", "Aide ponctuel"];
 
@@ -52,15 +24,14 @@ export default function App() {
   const todayStr = `${todayObj.getFullYear()}-${String(todayObj.getMonth() + 1).padStart(2, '0')}-${String(todayObj.getDate()).padStart(2, '0')}`;
 
   // --- ÉTATS ---
-  const [isLoaded, setIsLoaded] = useState(false); // Gère l'écran de chargement initial
-  
+  const [isLoaded, setIsLoaded] = useState(false);
   const [anneeActuelle, setAnneeActuelle] = useState(2026);
   const [dateDuJour, setDateDuJour] = useState("");
   const [selectedDate, setSelectedDate] = useState(todayStr);
   
   const [membresBase, setMembresBase] = useState(defaultEquipe);
   const [conges, setConges] = useState([]);
-  const [evenements, setEvenements] = useState(evenementsInitiaux);
+  const [evenements, setEvenements] = useState({}); // Dictionnaire de tableaux
   const [notes, setNotes] = useState({});
 
   const [modalCongeOpen, setModalCongeOpen] = useState(false);
@@ -74,7 +45,7 @@ export default function App() {
   const [evtForm, setEvtForm] = useState({ dateDebut: '', dateFin: '', titre: '', type: 'concours_oui' });
   const [noteText, setNoteText] = useState("");
 
-  // --- CHARGEMENT DEPUIS SUPABASE AU DÉMARRAGE ---
+  // --- CHARGEMENT DEPUIS SUPABASE ---
   useEffect(() => {
     async function chargerDonnees() {
       const { data, error } = await supabase.from('app_state').select('*');
@@ -85,11 +56,20 @@ export default function App() {
 
         if (stateMap['poney_equipe']) setMembresBase(stateMap['poney_equipe']);
         if (stateMap['poney_conges']) setConges(stateMap['poney_conges']);
-        if (stateMap['poney_evenements']) setEvenements(stateMap['poney_evenements']);
         if (stateMap['poney_notes']) setNotes(stateMap['poney_notes']);
         if (stateMap['poney_annee']) setAnneeActuelle(Number(stateMap['poney_annee']));
+        
+        // Adaptation pour transformer les anciens événements uniques en tableau (pour supporter le multi-événements)
+        if (stateMap['poney_evenements']) {
+          const evtsData = stateMap['poney_evenements'];
+          const formattedEvts = {};
+          Object.keys(evtsData).forEach(date => {
+            formattedEvts[date] = Array.isArray(evtsData[date]) ? evtsData[date] : [evtsData[date]];
+          });
+          setEvenements(formattedEvts);
+        }
       }
-      setIsLoaded(true); // Enlève l'écran de chargement
+      setIsLoaded(true);
     }
     chargerDonnees();
 
@@ -97,36 +77,15 @@ export default function App() {
     setDateDuJour(new Date().toLocaleDateString('fr-CH', options));
   }, []);
 
-  // --- SAUVEGARDE AUTOMATIQUE VERS SUPABASE (Remplaçant le localStorage) ---
-  useEffect(() => {
-    if (!isLoaded) return; // Empêche d'écraser la base avant le premier chargement
-    supabase.from('app_state').upsert({ id: 'poney_equipe', data: membresBase }).then();
-  }, [membresBase, isLoaded]);
-
-  useEffect(() => {
-    if (!isLoaded) return;
-    supabase.from('app_state').upsert({ id: 'poney_conges', data: conges }).then();
-  }, [conges, isLoaded]);
-
-  useEffect(() => {
-    if (!isLoaded) return;
-    supabase.from('app_state').upsert({ id: 'poney_evenements', data: evenements }).then();
-  }, [evenements, isLoaded]);
-
-  useEffect(() => {
-    if (!isLoaded) return;
-    supabase.from('app_state').upsert({ id: 'poney_notes', data: notes }).then();
-  }, [notes, isLoaded]);
-
-  useEffect(() => {
-    if (!isLoaded) return;
-    supabase.from('app_state').upsert({ id: 'poney_annee', data: anneeActuelle.toString() }).then();
-  }, [anneeActuelle, isLoaded]);
+  // --- SAUVEGARDE AUTOMATIQUE VERS SUPABASE ---
+  useEffect(() => { if (isLoaded) supabase.from('app_state').upsert({ id: 'poney_equipe', data: membresBase }).then(); }, [membresBase, isLoaded]);
+  useEffect(() => { if (isLoaded) supabase.from('app_state').upsert({ id: 'poney_conges', data: conges }).then(); }, [conges, isLoaded]);
+  useEffect(() => { if (isLoaded) supabase.from('app_state').upsert({ id: 'poney_evenements', data: evenements }).then(); }, [evenements, isLoaded]);
+  useEffect(() => { if (isLoaded) supabase.from('app_state').upsert({ id: 'poney_notes', data: notes }).then(); }, [notes, isLoaded]);
+  useEffect(() => { if (isLoaded) supabase.from('app_state').upsert({ id: 'poney_annee', data: anneeActuelle.toString() }).then(); }, [anneeActuelle, isLoaded]);
 
   // --- CALCULS ---
-  const palefrenierIds = useMemo(() => {
-    return new Set(membresBase.filter(m => m.role === 'Palefrenier').map(m => m.id));
-  }, [membresBase]);
+  const palefrenierIds = useMemo(() => new Set(membresBase.filter(m => m.role === 'Palefrenier').map(m => m.id)), [membresBase]);
 
   const equipeCalculee = useMemo(() => {
     return membresBase.map(membre => {
@@ -145,16 +104,15 @@ export default function App() {
   const absentsDuJourSelectionne = congesParDate[selectedDate] || [];
   const palefreniersAbsentsSel = absentsDuJourSelectionne.filter(c => palefrenierIds.has(c.userId));
   const isAlertePalefrenierHeader = palefreniersAbsentsSel.length > 2;
-  const evtSelectionne = evenements[selectedDate];
+  
+  // Récupération sécurisée du tableau d'événements pour le jour sélectionné
+  const evtsSelectionnes = evenements[selectedDate] || [];
 
-  // --- ACTIONS ---
+  // --- ACTIONS STAFF & CONGÉS ---
   const sauvegarderStaff = (e) => {
     e.preventDefault();
-    if (staffForm.id) {
-      setMembresBase(membresBase.map(m => m.id === staffForm.id ? { ...staffForm, total: Number(staffForm.total) } : m));
-    } else {
-      setMembresBase([...membresBase, { ...staffForm, id: Date.now(), total: Number(staffForm.total) }]);
-    }
+    if (staffForm.id) setMembresBase(membresBase.map(m => m.id === staffForm.id ? { ...staffForm, total: Number(staffForm.total) } : m));
+    else setMembresBase([...membresBase, { ...staffForm, id: Date.now(), total: Number(staffForm.total) }]);
     setStaffForm({ id: null, nom: '', role: 'Palefrenier', total: 25, repos: '' });
   };
   const editerStaff = (membre) => setStaffForm(membre);
@@ -166,11 +124,8 @@ export default function App() {
   };
 
   const ouvrirModalConge = (dateStr = '', congeExistant = null) => {
-    if (congeExistant) {
-      setFormData({ ...congeExistant, dateDebut: congeExistant.date, dateFin: congeExistant.date });
-    } else {
-      setFormData({ id: null, userId: membresBase[0]?.id || '', dateDebut: dateStr, dateFin: dateStr, periode: 'jour', statut: 'provisoire' });
-    }
+    if (congeExistant) setFormData({ ...congeExistant, dateDebut: congeExistant.date, dateFin: congeExistant.date });
+    else setFormData({ id: null, userId: membresBase[0]?.id || '', dateDebut: dateStr, dateFin: dateStr, periode: 'jour', statut: 'provisoire' });
     setModalCongeOpen(true);
   };
 
@@ -182,7 +137,6 @@ export default function App() {
       const nouveauxConges = [];
       let dateCourante = new Date(formData.dateDebut);
       const dateFinObj = new Date(formData.dateFin || formData.dateDebut);
-
       while (dateCourante <= dateFinObj) {
         const dateStr = `${dateCourante.getFullYear()}-${String(dateCourante.getMonth() + 1).padStart(2, '0')}-${String(dateCourante.getDate()).padStart(2, '0')}`;
         nouveauxConges.push({ id: Date.now() + Math.random(), userId: Number(formData.userId), date: dateStr, periode: formData.dateDebut !== formData.dateFin ? 'jour' : formData.periode, statut: formData.statut });
@@ -200,6 +154,7 @@ export default function App() {
     }
   };
 
+  // --- ACTIONS ÉVÉNEMENTS (Gère les tableaux multiples) ---
   const ouvrirModalEvt = (dateStr = '') => {
     setEvtForm({ dateDebut: dateStr, dateFin: dateStr, titre: '', type: 'concours_oui' });
     setModalEvtOpen(true);
@@ -213,21 +168,24 @@ export default function App() {
 
     while (dateCourante <= dateFinObj) {
       const dateStr = `${dateCourante.getFullYear()}-${String(dateCourante.getMonth() + 1).padStart(2, '0')}-${String(dateCourante.getDate()).padStart(2, '0')}`;
-      nouveauxEvts[dateStr] = { id: Date.now().toString() + Math.random(), type: evtForm.type, titre: evtForm.titre };
+      const evtToAdd = { id: Date.now().toString() + Math.random(), type: evtForm.type, titre: evtForm.titre };
+      nouveauxEvts[dateStr] = nouveauxEvts[dateStr] ? [...nouveauxEvts[dateStr], evtToAdd] : [evtToAdd];
       dateCourante.setDate(dateCourante.getDate() + 1);
     }
     setEvenements(nouveauxEvts);
     setModalEvtOpen(false);
   };
 
-  const supprimerEvenement = (dateStr, evt) => {
-    if (window.confirm(`Voulez-vous supprimer l'événement : ${evt.titre} ?`)) {
+  const supprimerEvenement = (dateStr, evtId) => {
+    if (window.confirm(`Voulez-vous vraiment supprimer cet événement ?`)) {
       const nouveauxEvts = { ...evenements };
-      delete nouveauxEvts[dateStr];
+      nouveauxEvts[dateStr] = nouveauxEvts[dateStr].filter(e => e.id !== evtId);
+      if (nouveauxEvts[dateStr].length === 0) delete nouveauxEvts[dateStr];
       setEvenements(nouveauxEvts);
     }
   };
 
+  // --- OUTILS CALENDRIER ---
   const sauvegarderNote = (e) => {
     e.preventDefault();
     const newNotes = { ...notes };
@@ -244,6 +202,14 @@ export default function App() {
     for (let i = 0; i < jourSemaine; i++) jours.push(null);
     while (date.getMonth() === mois) { jours.push(new Date(date)); date.setDate(date.getDate() + 1); }
     return jours;
+  };
+
+  const getColorClassForEvent = (type) => {
+    if (type === 'concours_oui') return "bg-[#8B5A2B]";
+    if (type === 'concours_non') return "bg-gray-500";
+    if (type === 'vacances_ge') return "bg-blue-500";
+    if (type === 'jour_ferie') return "bg-purple-500";
+    return "bg-black";
   };
 
   const calendrierMemoise = useMemo(() => {
@@ -264,7 +230,7 @@ export default function App() {
                 const isPast = dateStr < todayStr;
                 const isToday = dateStr === todayStr;
 
-                const evtFixe = evenements[dateStr];
+                const evtsDuJour = evenements[dateStr] || [];
                 const congesDuJour = congesParDate[dateStr] || [];
                 const hasConge = congesDuJour.length > 0;
                 const noteDuJour = notes[dateStr];
@@ -273,10 +239,9 @@ export default function App() {
                 
                 let baseClass = "bg-[#E9EDC9] hover:bg-[#CCD5AE] text-[#3D4035]";
                 let borderClass = ""; 
-                let icon = null;
-                let eventLineColor = "";
-
-                if (isPast && !hasConge && !evtFixe && !isAlertePalefrenierCell) {
+                
+                // --- MISE À JOUR DES COULEURS (Aujourd'hui & Passé) ---
+                if (isPast && !hasConge && evtsDuJour.length === 0 && !isAlertePalefrenierCell) {
                   baseClass = "bg-[#E0DDCF]/50 text-gray-500 hover:bg-[#D4D0C0]";
                 }
 
@@ -284,22 +249,16 @@ export default function App() {
                   baseClass = "bg-red-500 text-white font-bold z-10 shadow-md";
                   borderClass = "border-2 border-red-700 ring-2 ring-red-300";
                 } else if (isToday) {
-                  baseClass = "bg-red-50 text-red-800 font-bold z-10";
-                  borderClass = "ring-2 ring-red-500 ring-inset shadow-md"; 
+                  // NOUVELLE COULEUR "AUJOURD'HUI" (Ambre/Or très marqué)
+                  baseClass = "bg-amber-100 text-amber-900 font-extrabold z-10 shadow-lg scale-[1.05] transition-transform";
+                  borderClass = "ring-4 ring-amber-500 ring-inset"; 
                 }
 
-                if (evtFixe) {
-                  if (evtFixe.type === 'concours_oui') eventLineColor = "bg-[#8B5A2B]";
-                  else if (evtFixe.type === 'concours_non') eventLineColor = "bg-gray-500";
-                  else if (evtFixe.type === 'vacances_ge') eventLineColor = "bg-blue-500";
-                  else if (evtFixe.type === 'jour_ferie') eventLineColor = "bg-purple-500";
-
-                  if (!isAlertePalefrenierCell && !hasConge) {
-                    if (evtFixe.type === 'concours_oui') { borderClass += isToday ? " border-2 border-[#8B5A2B]" : " border-2 border-[#8B5A2B]"; icon = <Award size={10} className="absolute -top-1 -right-1 text-[#8B5A2B]" />; }
-                    if (evtFixe.type === 'concours_non') { borderClass += " border border-gray-400 bg-gray-200"; icon = <Tent size={10} className="absolute -top-1 -right-1 text-gray-500" />; }
-                    if (evtFixe.type === 'vacances_ge') { baseClass = isToday ? "bg-red-100 text-red-800" : "bg-blue-100 text-blue-800"; }
-                    if (evtFixe.type === 'jour_ferie') { baseClass = isToday ? "bg-red-100 text-red-800" : "bg-purple-100 text-purple-800 font-bold"; }
-                  }
+                // Fond spécifique s'il y a un événement et aucun congé/alerte
+                if (!isAlertePalefrenierCell && !hasConge && evtsDuJour.length > 0) {
+                  const firstEvt = evtsDuJour[0];
+                  if (firstEvt.type === 'vacances_ge') baseClass = isToday ? baseClass : "bg-blue-100 text-blue-800";
+                  if (firstEvt.type === 'jour_ferie') baseClass = isToday ? baseClass : "bg-purple-100 text-purple-800 font-bold";
                 }
 
                 const handleDayClick = () => {
@@ -308,26 +267,40 @@ export default function App() {
                 };
 
                 return (
-                  <div key={jIndex} onClick={handleDayClick} title={evtFixe ? evtFixe.titre : (noteDuJour ? noteDuJour : '')}
+                  <div key={jIndex} onClick={handleDayClick} title={evtsDuJour.map(e=>e.titre).join(', ') || (noteDuJour ? noteDuJour : '')}
                     className={`h-8 rounded flex items-center justify-center text-xs relative cursor-pointer overflow-hidden ${baseClass} ${borderClass}`}
                   >
+                    {/* CONGÉS : Validé (Vert Foncé) / Provisoire (Gris-Bleu doux pointillé) */}
                     {hasConge && !isAlertePalefrenierCell && (
-                      <div className="absolute inset-0 flex flex-col opacity-90 z-0">
-                        <div className={`h-1/2 w-full ${congesDuJour.some(c => (c.periode === 'jour' || c.periode === 'matin') && c.statut === 'valide') ? 'bg-[#4A5D23]' : congesDuJour.some(c => (c.periode === 'jour' || c.periode === 'matin') && c.statut === 'provisoire') ? 'bg-yellow-400' : ''}`}></div>
-                        <div className={`h-1/2 w-full ${congesDuJour.some(c => (c.periode === 'jour' || c.periode === 'apres-midi') && c.statut === 'valide') ? 'bg-[#4A5D23]' : congesDuJour.some(c => (c.periode === 'jour' || c.periode === 'apres-midi') && c.statut === 'provisoire') ? 'bg-yellow-400' : ''}`}></div>
+                      <div className="absolute inset-0 flex flex-col opacity-95 z-0">
+                        <div className={`h-1/2 w-full ${congesDuJour.some(c => (c.periode === 'jour' || c.periode === 'matin') && c.statut === 'valide') ? 'bg-[#4A5D23]' : congesDuJour.some(c => (c.periode === 'jour' || c.periode === 'matin') && c.statut === 'provisoire') ? 'bg-[#E0E5EC]' : ''}`}></div>
+                        <div className={`h-1/2 w-full ${congesDuJour.some(c => (c.periode === 'jour' || c.periode === 'apres-midi') && c.statut === 'valide') ? 'bg-[#4A5D23]' : congesDuJour.some(c => (c.periode === 'jour' || c.periode === 'apres-midi') && c.statut === 'provisoire') ? 'bg-[#E0E5EC]' : ''}`}></div>
                       </div>
                     )}
-                    {congesDuJour.some(c => c.statut === 'provisoire') && !isAlertePalefrenierCell && <div className="absolute inset-0 border-[1.5px] border-dashed border-yellow-600 rounded z-0"></div>}
+                    {/* Bordure du congé provisoire */}
+                    {congesDuJour.some(c => c.statut === 'provisoire') && !isAlertePalefrenierCell && (
+                      <div className="absolute inset-0 border-2 border-dashed border-[#A3B1C6] rounded z-0"></div>
+                    )}
                     
-                    {eventLineColor && (
-                      <div className={`absolute bottom-0 left-0 right-0 h-1.5 z-20 ${eventLineColor} shadow-sm`}></div>
+                    {/* MULTIPLES LIGNES D'ÉVÉNEMENTS EN BAS */}
+                    {evtsDuJour.length > 0 && (
+                      <div className="absolute bottom-0 left-0 right-0 flex flex-col z-20 opacity-90">
+                        {evtsDuJour.map((e, idx) => (
+                          <div key={idx} className={`h-1 w-full ${getColorClassForEvent(e.type)}`}></div>
+                        ))}
+                      </div>
                     )}
 
+                    {/* TEXTE (Jour) */}
                     <span className={`z-10 drop-shadow-sm ${congesDuJour.some(c => c.statut === 'valide') || isAlertePalefrenierCell ? 'text-white font-bold' : ''}`}>{jour.getDate()}</span>
-                    {icon}
+                    
+                    {/* ICONES ÉVÉNEMENTS (Affichées au dessus) */}
+                    {!isAlertePalefrenierCell && !hasConge && evtsDuJour.some(e => e.type === 'concours_oui') && <Award size={10} className="absolute -top-0.5 -right-0.5 text-[#8B5A2B] z-10" />}
+                    {!isAlertePalefrenierCell && !hasConge && evtsDuJour.some(e => e.type === 'concours_non') && <Tent size={10} className="absolute -top-0.5 -right-0.5 text-gray-600 z-10" />}
 
+                    {/* POST-IT NOTE */}
                     {noteDuJour && !isAlertePalefrenierCell && (
-                      <StickyNote size={10} className={`absolute bottom-2 right-0.5 opacity-60 ${congesDuJour.some(c => c.statut === 'valide') ? 'text-white' : 'text-[#8B5A2B]'}`} />
+                      <StickyNote size={10} className={`absolute top-0.5 left-0.5 opacity-80 ${congesDuJour.some(c => c.statut === 'valide') ? 'text-yellow-300' : 'text-yellow-600'}`} />
                     )}
                   </div>
                 );
@@ -339,7 +312,6 @@ export default function App() {
     });
   }, [anneeActuelle, evenements, congesParDate, palefrenierIds, todayStr, notes]); 
 
-  // --- ÉCRAN DE CHARGEMENT ---
   if (!isLoaded) {
     return (
       <div className="flex h-screen items-center justify-center bg-[#F4F1DE] flex-col gap-4">
@@ -351,7 +323,6 @@ export default function App() {
     );
   }
 
-  // --- RENDU PRINCIPAL ---
   return (
     <div className="flex h-screen bg-[#F4F1DE] font-sans overflow-hidden text-[#3D4035] relative">
       
@@ -423,7 +394,7 @@ export default function App() {
           <img src="/logo.png" alt="Filigrane" className="w-[60vw] h-[60vw] max-w-[800px] max-h-[800px] object-contain grayscale" />
         </div>
 
-        <header className="min-h-20 bg-white/60 backdrop-blur-md border-b border-[#D4D0C0] flex items-center justify-between px-8 py-2 shadow-sm shrink-0 relative z-10">
+        <header className="min-h-24 bg-white/60 backdrop-blur-md border-b border-[#D4D0C0] flex items-center justify-between px-8 py-3 shadow-sm shrink-0 relative z-10">
           <div className="flex items-center gap-6 shrink-0">
             <div className="flex items-center gap-2 bg-white rounded-lg shadow-sm border border-gray-200 p-1">
               <button onClick={() => setAnneeActuelle(a => a - 1)} className="p-1 hover:bg-gray-100 rounded text-gray-500"><ChevronLeft size={20}/></button>
@@ -441,10 +412,15 @@ export default function App() {
               {selectedDate === todayStr ? "Aujourd'hui" : `Sélection : ${new Date(selectedDate).toLocaleDateString('fr-CH')}`}
             </span>
 
-            {evtSelectionne && (
-              <span className={`text-sm font-bold mb-1 flex items-center gap-2 ${isAlertePalefrenierHeader ? 'text-white' : (evtSelectionne.type === 'vacances_ge' ? 'text-blue-700' : evtSelectionne.type === 'jour_ferie' ? 'text-purple-700' : 'text-[#8B5A2B]')}`}>
-                {evtSelectionne.type === 'vacances_ge' ? '🏖️ ' : evtSelectionne.type === 'jour_ferie' ? '🎉 ' : '🚩 '}{evtSelectionne.titre}
-              </span>
+            {/* GESTION DES MULTIPLES ÉVÉNEMENTS DANS LE HEADER */}
+            {evtsSelectionnes.length > 0 && (
+              <div className="flex flex-wrap gap-3 justify-center mb-1">
+                {evtsSelectionnes.map(e => (
+                  <span key={e.id} className={`text-sm font-bold flex items-center gap-1.5 ${isAlertePalefrenierHeader ? 'text-white' : (e.type === 'vacances_ge' ? 'text-blue-700' : e.type === 'jour_ferie' ? 'text-purple-700' : 'text-[#8B5A2B]')}`}>
+                    {e.type === 'vacances_ge' ? '🏖️ ' : e.type === 'jour_ferie' ? '🎉 ' : '🚩 '}{e.titre}
+                  </span>
+                ))}
+              </div>
             )}
 
             {absentsDuJourSelectionne.length === 0 ? (
@@ -471,7 +447,7 @@ export default function App() {
             <div className="mt-1">
               {notes[selectedDate] ? (
                 <div onClick={() => { setNoteText(notes[selectedDate]); setModalNoteOpen(true); }}
-                     className="px-3 py-1 bg-yellow-100 border border-yellow-300 text-yellow-800 text-xs rounded-md shadow-sm cursor-pointer hover:bg-yellow-200 transition-colors flex items-center justify-center gap-1.5"
+                     className={`px-3 py-1 text-xs rounded-md shadow-sm cursor-pointer transition-colors flex items-center justify-center gap-1.5 ${isAlertePalefrenierHeader ? 'bg-red-800 text-white hover:bg-red-900 border border-red-900' : 'bg-yellow-100 border border-yellow-300 text-yellow-800 hover:bg-yellow-200'}`}
                      title="Modifier la note">
                   <StickyNote size={12} /> {notes[selectedDate]}
                 </div>
@@ -481,7 +457,6 @@ export default function App() {
                 </button>
               )}
             </div>
-
           </div>
 
           <div className="text-right shrink-0 hidden lg:block">
@@ -489,9 +464,10 @@ export default function App() {
           </div>
         </header>
 
+        {/* LÉGENDE */}
         <div className="bg-white/80 backdrop-blur-md px-8 py-3 flex gap-6 border-b border-[#D4D0C0] text-sm shrink-0 flex-wrap shadow-sm relative z-10">
           <div className="flex items-center gap-2"><div className="w-4 h-4 bg-[#4A5D23] rounded-sm"></div> Validé</div>
-          <div className="flex items-center gap-2"><div className="w-4 h-4 bg-yellow-200 border-2 border-dashed border-yellow-500 rounded-sm"></div> Provisoire</div>
+          <div className="flex items-center gap-2"><div className="w-4 h-4 bg-[#E0E5EC] border-2 border-dashed border-[#A3B1C6] rounded-sm"></div> Provisoire</div>
           <div className="flex items-center gap-2"><div className="w-4 h-1.5 bg-[#8B5A2B] rounded-sm"></div> Concours Club</div>
           <div className="flex items-center gap-2"><div className="w-4 h-1.5 bg-blue-500 rounded-sm"></div> Vacances GE</div>
           <div className="flex items-center gap-2"><div className="w-4 h-1.5 bg-purple-500 rounded-sm"></div> Jour Férié</div>
@@ -520,10 +496,15 @@ export default function App() {
               <Flag size={18}/> Ajouter un Événement
             </button>
 
-            {evenements[modalChoiceOpen] && (
-              <button onClick={() => { supprimerEvenement(modalChoiceOpen, evenements[modalChoiceOpen]); setModalChoiceOpen(null); }} className="w-full py-3 bg-red-100 hover:bg-red-200 text-red-700 rounded-xl font-bold flex items-center justify-center gap-2 mt-4">
-                <Trash2 size={18}/> Supprimer l'événement
-              </button>
+            {evenements[modalChoiceOpen] && evenements[modalChoiceOpen].length > 0 && (
+              <div className="mt-4 border-t pt-4">
+                <p className="text-xs text-gray-500 mb-2 uppercase font-bold tracking-wide">Supprimer un événement</p>
+                {evenements[modalChoiceOpen].map(e => (
+                  <button key={e.id} onClick={() => { supprimerEvenement(modalChoiceOpen, e.id); setModalChoiceOpen(null); }} className="w-full py-2 mb-2 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg text-sm font-bold flex items-center justify-center gap-2 border border-red-200 transition-colors">
+                    <Trash2 size={16}/> {e.titre}
+                  </button>
+                ))}
+              </div>
             )}
             
             <button onClick={() => setModalChoiceOpen(null)} className="w-full py-3 text-gray-500 hover:bg-gray-100 rounded-xl font-bold mt-2 transition-colors">
@@ -634,7 +615,7 @@ export default function App() {
               <div>
                 <label className="block text-sm font-bold text-[#6B705C] mb-1">Statut</label>
                 <div className="flex gap-4">
-                  <label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="statut" value="provisoire" checked={formData.statut === 'provisoire'} onChange={(e) => setFormData({...formData, statut: e.target.value})} className="text-yellow-600 focus:ring-yellow-600 w-4 h-4" /><span className="text-yellow-600 font-bold">Provisoire</span></label>
+                  <label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="statut" value="provisoire" checked={formData.statut === 'provisoire'} onChange={(e) => setFormData({...formData, statut: e.target.value})} className="text-gray-500 focus:ring-gray-400 w-4 h-4" /><span className="text-gray-500 font-bold">Provisoire</span></label>
                   <label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="statut" value="valide" checked={formData.statut === 'valide'} onChange={(e) => setFormData({...formData, statut: e.target.value})} className="text-[#4A5D23] focus:ring-[#4A5D23] w-4 h-4" /><span className="text-[#6B705C] font-bold">Validé</span></label>
                 </div>
               </div>
