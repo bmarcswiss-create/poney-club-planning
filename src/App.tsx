@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect, useMemo } from 'react';
-import { Calendar as CalendarIcon, MapPin, Award, Trash2, X, Plus, AlertCircle, Users, Tent, ChevronLeft, ChevronRight, Settings, Edit, Flag, StickyNote } from 'lucide-react';
+import { Calendar as CalendarIcon, MapPin, Award, Trash2, X, Plus, AlertCircle, Users, Tent, ChevronLeft, ChevronRight, Settings, Edit, Flag, StickyNote, Printer } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
 // --- CONNEXION À SUPABASE ---
@@ -31,8 +31,11 @@ export default function App() {
   
   const [membresBase, setMembresBase] = useState(defaultEquipe);
   const [conges, setConges] = useState([]);
-  const [evenements, setEvenements] = useState({}); // Dictionnaire de tableaux
+  const [evenements, setEvenements] = useState({});
   const [notes, setNotes] = useState({});
+
+  // NOUVEAU : Filtre par employé
+  const [filtreEmploye, setFiltreEmploye] = useState(null);
 
   const [modalCongeOpen, setModalCongeOpen] = useState(false);
   const [modalStaffOpen, setModalStaffOpen] = useState(false);
@@ -59,7 +62,6 @@ export default function App() {
         if (stateMap['poney_notes']) setNotes(stateMap['poney_notes']);
         if (stateMap['poney_annee']) setAnneeActuelle(Number(stateMap['poney_annee']));
         
-        // Adaptation pour transformer les anciens événements uniques en tableau (pour supporter le multi-événements)
         if (stateMap['poney_evenements']) {
           const evtsData = stateMap['poney_evenements'];
           const formattedEvts = {};
@@ -104,8 +106,6 @@ export default function App() {
   const absentsDuJourSelectionne = congesParDate[selectedDate] || [];
   const palefreniersAbsentsSel = absentsDuJourSelectionne.filter(c => palefrenierIds.has(c.userId));
   const isAlertePalefrenierHeader = palefreniersAbsentsSel.length > 2;
-  
-  // Récupération sécurisée du tableau d'événements pour le jour sélectionné
   const evtsSelectionnes = evenements[selectedDate] || [];
 
   // --- ACTIONS STAFF & CONGÉS ---
@@ -120,6 +120,7 @@ export default function App() {
     if (window.confirm("Supprimer ce membre ? Ses congés seront aussi supprimés.")) {
       setMembresBase(membresBase.filter(m => m.id !== id));
       setConges(conges.filter(c => c.userId !== id));
+      if (filtreEmploye === id) setFiltreEmploye(null);
     }
   };
 
@@ -131,6 +132,29 @@ export default function App() {
 
   const sauvegarderConge = (e) => {
     e.preventDefault();
+    
+    // NOUVEAU : VÉRIFICATION DES CONFLITS AVEC LES CONCOURS
+    if (formData.statut === 'valide') {
+      let aUnConflit = false;
+      let dateCouranteCheck = new Date(formData.dateDebut);
+      const dateFinObjCheck = new Date(formData.dateFin || formData.dateDebut);
+      
+      while (dateCouranteCheck <= dateFinObjCheck) {
+        const dateStrCheck = `${dateCouranteCheck.getFullYear()}-${String(dateCouranteCheck.getMonth() + 1).padStart(2, '0')}-${String(dateCouranteCheck.getDate()).padStart(2, '0')}`;
+        if (evenements[dateStrCheck] && evenements[dateStrCheck].some(evt => evt.type === 'concours_oui')) {
+          aUnConflit = true;
+          break;
+        }
+        dateCouranteCheck.setDate(dateCouranteCheck.getDate() + 1);
+      }
+
+      if (aUnConflit) {
+        const confirm = window.confirm("⚠️ ATTENTION : Un ou plusieurs jours de ce congé tombent pendant un CONCOURS du club.\n\nVoulez-vous vraiment valider cette absence ?");
+        if (!confirm) return; // On annule la sauvegarde si l'utilisateur dit Non
+      }
+    }
+
+    // Sauvegarde normale
     if (formData.id) {
       setConges(conges.map(c => c.id === formData.id ? { ...formData, userId: Number(formData.userId), date: formData.dateDebut } : c));
     } else {
@@ -154,7 +178,7 @@ export default function App() {
     }
   };
 
-  // --- ACTIONS ÉVÉNEMENTS (Gère les tableaux multiples) ---
+  // --- ACTIONS ÉVÉNEMENTS ---
   const ouvrirModalEvt = (dateStr = '') => {
     setEvtForm({ dateDebut: dateStr, dateFin: dateStr, titre: '', type: 'concours_oui' });
     setModalEvtOpen(true);
@@ -185,7 +209,6 @@ export default function App() {
     }
   };
 
-  // --- OUTILS CALENDRIER ---
   const sauvegarderNote = (e) => {
     e.preventDefault();
     const newNotes = { ...notes };
@@ -212,12 +235,13 @@ export default function App() {
     return "bg-black";
   };
 
+  // --- CALENDRIER MÉMOISÉ ---
   const calendrierMemoise = useMemo(() => {
     return moisNoms.map((mois, index) => {
       const jours = getJoursMois(index, anneeActuelle);
       return (
-        <div key={mois} className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-sm border border-[#E0DDCF] overflow-hidden">
-          <div className="bg-[#CCD5AE] py-2 text-center font-bold text-[#3D4035]">{mois}</div>
+        <div key={mois} className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-sm border border-[#E0DDCF] overflow-hidden break-inside-avoid">
+          <div className="bg-[#CCD5AE] py-2 text-center font-bold text-[#3D4035] print:bg-gray-200 print:border-b print:border-gray-300">{mois}</div>
           <div className="p-3">
             <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-[#6B705C] mb-2">
               <div>LU</div><div>MA</div><div>ME</div><div>JE</div><div>VE</div><div>SA</div><div>DI</div>
@@ -231,31 +255,36 @@ export default function App() {
                 const isToday = dateStr === todayStr;
 
                 const evtsDuJour = evenements[dateStr] || [];
-                const congesDuJour = congesParDate[dateStr] || [];
+                
+                // NOUVEAU : On filtre les congés affichés si un employé est sélectionné à gauche
+                let congesDuJour = congesParDate[dateStr] || [];
+                if (filtreEmploye) {
+                  congesDuJour = congesDuJour.filter(c => c.userId === filtreEmploye);
+                }
                 const hasConge = congesDuJour.length > 0;
                 const noteDuJour = notes[dateStr];
 
-                const isAlertePalefrenierCell = congesDuJour.filter(c => palefrenierIds.has(c.userId)).length > 2;
+                // L'alerte rouge globale est désactivée si on regarde le filtre d'une seule personne
+                const palefreniersAbsentsCell = (congesParDate[dateStr] || []).filter(c => palefrenierIds.has(c.userId));
+                const isAlertePalefrenierCell = !filtreEmploye && palefreniersAbsentsCell.length > 2;
                 
                 let baseClass = "bg-[#E9EDC9] hover:bg-[#CCD5AE] text-[#3D4035]";
                 let borderClass = ""; 
+                let icon = null;
                 
-                // --- MISE À JOUR DES COULEURS (Aujourd'hui & Passé) ---
                 if (isPast && !hasConge && evtsDuJour.length === 0 && !isAlertePalefrenierCell) {
                   baseClass = "bg-[#E0DDCF]/50 text-gray-500 hover:bg-[#D4D0C0]";
                 }
 
                 if (isAlertePalefrenierCell) {
                   baseClass = "bg-red-500 text-white font-bold z-10 shadow-md";
-                  borderClass = "border-2 border-red-700 ring-2 ring-red-300";
+                  borderClass = "border-2 border-red-700 ring-2 ring-red-300 print:border-red-500";
                 } else if (isToday) {
-                  // NOUVELLE COULEUR "AUJOURD'HUI" (Ambre/Or très marqué)
-                  baseClass = "bg-amber-100 text-amber-900 font-extrabold z-10 shadow-lg scale-[1.05] transition-transform";
-                  borderClass = "ring-4 ring-amber-500 ring-inset"; 
+                  baseClass = "bg-amber-100 text-amber-900 font-extrabold z-10 shadow-lg scale-[1.05] transition-transform print:scale-100";
+                  borderClass = "ring-4 ring-amber-500 ring-inset print:ring-2 print:border-amber-500"; 
                 }
 
-                // Fond spécifique s'il y a un événement et aucun congé/alerte
-                if (!isAlertePalefrenierCell && !hasConge && evtsDuJour.length > 0) {
+                if (evtsDuJour.length > 0 && !isAlertePalefrenierCell && !hasConge) {
                   const firstEvt = evtsDuJour[0];
                   if (firstEvt.type === 'vacances_ge') baseClass = isToday ? baseClass : "bg-blue-100 text-blue-800";
                   if (firstEvt.type === 'jour_ferie') baseClass = isToday ? baseClass : "bg-purple-100 text-purple-800 font-bold";
@@ -268,39 +297,33 @@ export default function App() {
 
                 return (
                   <div key={jIndex} onClick={handleDayClick} title={evtsDuJour.map(e=>e.titre).join(', ') || (noteDuJour ? noteDuJour : '')}
-                    className={`h-8 rounded flex items-center justify-center text-xs relative cursor-pointer overflow-hidden ${baseClass} ${borderClass}`}
+                    className={`h-8 rounded flex items-center justify-center text-xs relative cursor-pointer overflow-hidden print:border print:border-gray-200 ${baseClass} ${borderClass}`}
                   >
-                    {/* CONGÉS : Validé (Vert Foncé) / Provisoire (Gris-Bleu doux pointillé) */}
                     {hasConge && !isAlertePalefrenierCell && (
                       <div className="absolute inset-0 flex flex-col opacity-95 z-0">
-                        <div className={`h-1/2 w-full ${congesDuJour.some(c => (c.periode === 'jour' || c.periode === 'matin') && c.statut === 'valide') ? 'bg-[#4A5D23]' : congesDuJour.some(c => (c.periode === 'jour' || c.periode === 'matin') && c.statut === 'provisoire') ? 'bg-[#E0E5EC]' : ''}`}></div>
-                        <div className={`h-1/2 w-full ${congesDuJour.some(c => (c.periode === 'jour' || c.periode === 'apres-midi') && c.statut === 'valide') ? 'bg-[#4A5D23]' : congesDuJour.some(c => (c.periode === 'jour' || c.periode === 'apres-midi') && c.statut === 'provisoire') ? 'bg-[#E0E5EC]' : ''}`}></div>
+                        <div className={`h-1/2 w-full ${congesDuJour.some(c => (c.periode === 'jour' || c.periode === 'matin') && c.statut === 'valide') ? 'bg-[#4A5D23] print:bg-gray-400 print:border-b print:border-gray-500' : congesDuJour.some(c => (c.periode === 'jour' || c.periode === 'matin') && c.statut === 'provisoire') ? 'bg-[#E0E5EC]' : ''}`}></div>
+                        <div className={`h-1/2 w-full ${congesDuJour.some(c => (c.periode === 'jour' || c.periode === 'apres-midi') && c.statut === 'valide') ? 'bg-[#4A5D23] print:bg-gray-400 print:border-t print:border-gray-500' : congesDuJour.some(c => (c.periode === 'jour' || c.periode === 'apres-midi') && c.statut === 'provisoire') ? 'bg-[#E0E5EC]' : ''}`}></div>
                       </div>
                     )}
-                    {/* Bordure du congé provisoire */}
                     {congesDuJour.some(c => c.statut === 'provisoire') && !isAlertePalefrenierCell && (
-                      <div className="absolute inset-0 border-2 border-dashed border-[#A3B1C6] rounded z-0"></div>
+                      <div className="absolute inset-0 border-2 border-dashed border-[#A3B1C6] rounded z-0 print:border-gray-400"></div>
                     )}
                     
-                    {/* MULTIPLES LIGNES D'ÉVÉNEMENTS EN BAS */}
                     {evtsDuJour.length > 0 && (
                       <div className="absolute bottom-0 left-0 right-0 flex flex-col z-20 opacity-90">
                         {evtsDuJour.map((e, idx) => (
-                          <div key={idx} className={`h-1 w-full ${getColorClassForEvent(e.type)}`}></div>
+                          <div key={idx} className={`h-1 w-full ${getColorClassForEvent(e.type)} print:bg-gray-800`}></div>
                         ))}
                       </div>
                     )}
 
-                    {/* TEXTE (Jour) */}
-                    <span className={`z-10 drop-shadow-sm ${congesDuJour.some(c => c.statut === 'valide') || isAlertePalefrenierCell ? 'text-white font-bold' : ''}`}>{jour.getDate()}</span>
+                    <span className={`z-10 drop-shadow-sm ${congesDuJour.some(c => c.statut === 'valide') || isAlertePalefrenierCell ? 'text-white font-bold print:text-black' : ''}`}>{jour.getDate()}</span>
                     
-                    {/* ICONES ÉVÉNEMENTS (Affichées au dessus) */}
-                    {!isAlertePalefrenierCell && !hasConge && evtsDuJour.some(e => e.type === 'concours_oui') && <Award size={10} className="absolute -top-0.5 -right-0.5 text-[#8B5A2B] z-10" />}
-                    {!isAlertePalefrenierCell && !hasConge && evtsDuJour.some(e => e.type === 'concours_non') && <Tent size={10} className="absolute -top-0.5 -right-0.5 text-gray-600 z-10" />}
+                    {!isAlertePalefrenierCell && !hasConge && evtsDuJour.some(e => e.type === 'concours_oui') && <Award size={10} className="absolute -top-0.5 -right-0.5 text-[#8B5A2B] z-10 print:hidden" />}
+                    {!isAlertePalefrenierCell && !hasConge && evtsDuJour.some(e => e.type === 'concours_non') && <Tent size={10} className="absolute -top-0.5 -right-0.5 text-gray-600 z-10 print:hidden" />}
 
-                    {/* POST-IT NOTE */}
                     {noteDuJour && !isAlertePalefrenierCell && (
-                      <StickyNote size={10} className={`absolute top-0.5 left-0.5 opacity-80 ${congesDuJour.some(c => c.statut === 'valide') ? 'text-yellow-300' : 'text-yellow-600'}`} />
+                      <StickyNote size={10} className={`absolute top-0.5 left-0.5 opacity-80 print:hidden ${congesDuJour.some(c => c.statut === 'valide') ? 'text-yellow-300' : 'text-yellow-600'}`} />
                     )}
                   </div>
                 );
@@ -310,7 +333,7 @@ export default function App() {
         </div>
       );
     });
-  }, [anneeActuelle, evenements, congesParDate, palefrenierIds, todayStr, notes]); 
+  }, [anneeActuelle, evenements, congesParDate, palefrenierIds, todayStr, notes, filtreEmploye]); 
 
   if (!isLoaded) {
     return (
@@ -324,21 +347,19 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen bg-[#F4F1DE] font-sans overflow-hidden text-[#3D4035] relative">
+    // NOUVEAU : classes 'print:h-auto overflow-visible' pour permettre l'impression de toute la page
+    <div className="flex h-screen print:h-auto bg-[#F4F1DE] font-sans overflow-hidden print:overflow-visible text-[#3D4035] relative">
       
-      {/* SIDEBAR */}
-      <aside className="w-80 bg-[#E0DDCF] shadow-xl flex flex-col z-20 border-r border-[#D4D0C0] relative">
+      {/* SIDEBAR (Cachée à l'impression) */}
+      <aside className="w-80 bg-[#E0DDCF] shadow-xl flex flex-col z-20 border-r border-[#D4D0C0] relative print:hidden">
         <div className="p-6 bg-[#A3B18A] text-white flex flex-col items-center justify-center border-b-[6px] border-[#8B5A2B]">
           <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center mb-3 shadow-md overflow-hidden border-2 border-white">
             <img src="/logo.png" alt="Logo PCP" className="w-full h-full object-contain p-2" />
           </div>
-          
           <h2 className="text-xs font-extrabold uppercase tracking-wider text-[#F4F1DE] bg-[#704822] px-3 py-1.5 rounded-lg mb-2 text-center shadow-md border border-[#F4F1DE]/20 w-full">
             Organisation des<br/>équipes Écurie
           </h2>
-          <h1 className="text-xl font-bold tracking-wide text-center leading-tight drop-shadow-sm">
-            Poney Club<br/>de Presinge
-          </h1>
+          <h1 className="text-xl font-bold tracking-wide text-center leading-tight drop-shadow-sm">Poney Club<br/>de Presinge</h1>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4">
@@ -347,6 +368,9 @@ export default function App() {
             <button onClick={() => setModalStaffOpen(true)} className="text-[#8B5A2B] hover:bg-[#D4D0C0] p-1.5 rounded-md transition-colors" title="Gérer l'équipe"><Settings size={16} /></button>
           </div>
           
+          {/* NOUVEAU MESSAGE D'INFO POUR LE FILTRE */}
+          <p className="text-[10px] text-gray-500 italic mb-4 leading-tight">Cliquez sur un nom pour filtrer le calendrier.</p>
+
           <div className="space-y-4">
             {rolesDisponibles.map(role => {
               const membresRole = equipeCalculee.filter(m => m.role === role);
@@ -355,21 +379,28 @@ export default function App() {
               return (
                 <div key={role} className="mb-4">
                   <h4 className="text-[11px] font-bold text-[#8B5A2B] uppercase border-b border-[#8B5A2B]/20 mb-2 pb-1">{role}s</h4>
-                  {membresRole.map(membre => (
-                    <div key={membre.id} className="bg-white/60 p-2 rounded-lg mb-2 shadow-sm border border-white flex justify-between items-center">
-                      <span className="font-semibold text-sm leading-tight flex flex-col">
-                        {membre.nom}
-                        {membre.repos && <span className="text-[10px] text-[#6B705C] font-normal mt-0.5">Repos : {membre.repos}</span>}
-                      </span>
-                      {membre.total > 0 ? (
-                        <span className={`text-xs px-2 py-1 rounded-full font-bold ${membre.pris >= membre.total ? 'bg-red-100 text-red-700' : 'bg-[#CCD5AE] text-[#3D4035]'}`}>
-                          {membre.pris} / {membre.total} j.
+                  {membresRole.map(membre => {
+                    const isSelected = filtreEmploye === membre.id;
+                    return (
+                      <div 
+                        key={membre.id} 
+                        onClick={() => setFiltreEmploye(isSelected ? null : membre.id)}
+                        className={`p-2 rounded-lg mb-2 shadow-sm border flex justify-between items-center cursor-pointer transition-all ${isSelected ? 'bg-white border-[#8B5A2B] ring-1 ring-[#8B5A2B] scale-[1.02]' : 'bg-white/60 border-white hover:bg-white/90'}`}
+                      >
+                        <span className="font-semibold text-sm leading-tight flex flex-col">
+                          {membre.nom}
+                          {membre.repos && <span className="text-[10px] text-[#6B705C] font-normal mt-0.5">Repos : {membre.repos}</span>}
                         </span>
-                      ) : (
-                        <span className="text-xs px-2 py-1 bg-gray-200 text-gray-600 rounded-full">{membre.pris} j. pris</span>
-                      )}
-                    </div>
-                  ))}
+                        {membre.total > 0 ? (
+                          <span className={`text-xs px-2 py-1 rounded-full font-bold ${membre.pris >= membre.total ? 'bg-red-100 text-red-700' : 'bg-[#CCD5AE] text-[#3D4035]'}`}>
+                            {membre.pris} / {membre.total}
+                          </span>
+                        ) : (
+                          <span className="text-xs px-2 py-1 bg-gray-200 text-gray-600 rounded-full">{membre.pris} j.</span>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })}
@@ -387,14 +418,13 @@ export default function App() {
       </aside>
 
       {/* ZONE CENTRALE */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden relative bg-[#F4F1DE]">
+      <main className="flex-1 flex flex-col h-full print:h-auto overflow-hidden print:overflow-visible relative bg-[#F4F1DE] print:bg-white">
         
-        {/* FILIGRANE */}
-        <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-0 opacity-[0.07] overflow-hidden">
+        <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-0 opacity-[0.07] overflow-hidden print:opacity-[0.03]">
           <img src="/logo.png" alt="Filigrane" className="w-[60vw] h-[60vw] max-w-[800px] max-h-[800px] object-contain grayscale" />
         </div>
 
-        <header className="min-h-24 bg-white/60 backdrop-blur-md border-b border-[#D4D0C0] flex items-center justify-between px-8 py-3 shadow-sm shrink-0 relative z-10">
+        <header className="min-h-24 bg-white/60 backdrop-blur-md border-b border-[#D4D0C0] flex items-center justify-between px-8 py-3 shadow-sm shrink-0 relative z-10 print:hidden">
           <div className="flex items-center gap-6 shrink-0">
             <div className="flex items-center gap-2 bg-white rounded-lg shadow-sm border border-gray-200 p-1">
               <button onClick={() => setAnneeActuelle(a => a - 1)} className="p-1 hover:bg-gray-100 rounded text-gray-500"><ChevronLeft size={20}/></button>
@@ -412,7 +442,6 @@ export default function App() {
               {selectedDate === todayStr ? "Aujourd'hui" : `Sélection : ${new Date(selectedDate).toLocaleDateString('fr-CH')}`}
             </span>
 
-            {/* GESTION DES MULTIPLES ÉVÉNEMENTS DANS LE HEADER */}
             {evtsSelectionnes.length > 0 && (
               <div className="flex flex-wrap gap-3 justify-center mb-1">
                 {evtsSelectionnes.map(e => (
@@ -459,13 +488,16 @@ export default function App() {
             </div>
           </div>
 
-          <div className="text-right shrink-0 hidden lg:block">
-            <p className="text-[#8B5A2B] font-semibold capitalize">{dateDuJour}</p>
+          <div className="text-right shrink-0 flex items-center gap-4">
+            {/* NOUVEAU BOUTON : IMPRIMER */}
+            <button onClick={() => window.print()} className="p-2.5 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-lg text-gray-700 shadow-sm transition-colors" title="Imprimer le calendrier">
+              <Printer size={18} />
+            </button>
           </div>
         </header>
 
         {/* LÉGENDE */}
-        <div className="bg-white/80 backdrop-blur-md px-8 py-3 flex gap-6 border-b border-[#D4D0C0] text-sm shrink-0 flex-wrap shadow-sm relative z-10">
+        <div className="bg-white/80 backdrop-blur-md px-8 py-3 flex gap-6 border-b border-[#D4D0C0] text-sm shrink-0 flex-wrap shadow-sm relative z-10 print:hidden">
           <div className="flex items-center gap-2"><div className="w-4 h-4 bg-[#4A5D23] rounded-sm"></div> Validé</div>
           <div className="flex items-center gap-2"><div className="w-4 h-4 bg-[#E0E5EC] border-2 border-dashed border-[#A3B1C6] rounded-sm"></div> Provisoire</div>
           <div className="flex items-center gap-2"><div className="w-4 h-1.5 bg-[#8B5A2B] rounded-sm"></div> Concours Club</div>
@@ -473,8 +505,14 @@ export default function App() {
           <div className="flex items-center gap-2"><div className="w-4 h-1.5 bg-purple-500 rounded-sm"></div> Jour Férié</div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-8 relative z-10">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {/* Titre exclusif pour l'impression */}
+        <div className="hidden print:block text-center pt-8 pb-4">
+          <h1 className="text-3xl font-bold text-black">Planning Écurie - {anneeActuelle}</h1>
+          {filtreEmploye && <h2 className="text-xl font-bold text-gray-600 mt-2">Filtre actif : {membresBase.find(m => m.id === filtreEmploye)?.nom}</h2>}
+        </div>
+
+        <div className="flex-1 overflow-y-auto print:overflow-visible p-8 relative z-10 print:p-0">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 print:gap-4">
             {calendrierMemoise}
           </div>
         </div>
@@ -482,7 +520,7 @@ export default function App() {
 
       {/* --- MENU CHOIX AU CLIC SUR UN JOUR --- */}
       {modalChoiceOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 print:hidden">
           <div className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-sm text-center space-y-4">
             <h3 className="font-bold text-lg text-[#3D4035] border-b pb-2 mb-4">
               {new Date(modalChoiceOpen).toLocaleDateString('fr-CH', { weekday: 'long', day: 'numeric', month: 'long' })}
@@ -516,7 +554,7 @@ export default function App() {
 
       {/* --- NOUVEAU MODAL : AJOUT/MODIF D'UNE NOTE --- */}
       {modalNoteOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 print:hidden">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
             <div className="bg-yellow-400 px-6 py-3 flex justify-between items-center text-yellow-900">
               <h3 className="text-md font-bold flex items-center gap-2"><StickyNote size={18} /> Note du {new Date(selectedDate).toLocaleDateString('fr-CH')}</h3>
@@ -546,7 +584,7 @@ export default function App() {
 
       {/* --- MODAL : AJOUT D'ÉVÉNEMENT (CONCOURS) --- */}
       {modalEvtOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 print:hidden">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
             <div className="bg-[#8B5A2B] px-6 py-4 flex justify-between items-center text-white">
               <h3 className="text-lg font-bold flex items-center gap-2"><Flag size={20} /> Nouvel Événement</h3>
@@ -587,7 +625,7 @@ export default function App() {
 
       {/* --- MODAL : GESTION DES CONGÉS --- */}
       {modalCongeOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 print:hidden">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
             <div className="bg-[#A3B18A] px-6 py-4 flex justify-between items-center text-white">
               <h3 className="text-lg font-bold flex items-center gap-2"><CalendarIcon size={20} />{formData.id ? "Modifier le congé" : "Saisir un congé"}</h3>
@@ -633,7 +671,7 @@ export default function App() {
 
       {/* --- MODAL : GESTION DE L'ÉQUIPE (ADMIN) --- */}
       {modalStaffOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 print:hidden">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="bg-[#8B5A2B] px-6 py-4 flex justify-between items-center text-white shrink-0">
               <h3 className="text-lg font-bold flex items-center gap-2"><Settings size={20} /> Paramètres de l'équipe</h3>
