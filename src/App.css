@@ -1,0 +1,18 @@
+/* Nettoyage des marges par défaut */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  /* On s'assure que la police est belle partout */
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: #F4F1DE;
+}
+
+/* Petit effet de surbrillance quand on survole une carte */
+.group:hover {
+  transform: translateY(-5px);
+  transition: all 0.3s ease;
+}
