@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Calendar as CalendarIcon, MapPin, Award, Trash2, X, Plus, AlertCircle, Users, Tent, ChevronLeft, ChevronRight, Settings, Edit, Flag, StickyNote, Printer, FilterX, Briefcase } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
-// --- CONNEXION À SUPABASE ---
+// --- CONNEXION SUPABASE ---
 const supabaseUrl = 'https://lnwvlyswsmtafyoepovq.supabase.co';
 const supabaseKey = 'sb_publishable_azT_rAkqeE-zsnvolYSY9w_7MtlnBVI';
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -43,7 +43,7 @@ export default function App() {
   const [evtForm, setEvtForm] = useState({ dateDebut: '', dateFin: '', titre: '', type: 'concours_oui' });
   const [noteText, setNoteText] = useState("");
 
-  // --- SUPABASE CHARGEMENT ---
+  // --- CHARGEMENT SUPABASE ---
   useEffect(() => {
     async function load() {
       try {
@@ -91,16 +91,14 @@ export default function App() {
   const eventsJour = evenements[selectedDate] || [];
   const isAlerteHeader = !filtreEmploye && absentsJour.filter(c => palefrenierIds.has(c.userId)).length > 2;
 
-  // --- FONCTIONS ACTIONS ---
-  const ouvrirModalConge = (dateStr = '') => {
-    setFormData({ id: null, userId: membresBase?.[0]?.id || '', dateDebut: dateStr || todayStr, dateFin: dateStr || todayStr, periode: 'jour', statut: 'provisoire', category: 'conge' });
-    setModalCongeOpen(true);
-  };
-
+  // --- HANDLERS ACTIONS ---
   const handleSaveStaff = (e) => {
     e.preventDefault();
-    if (staffForm.id) setMembresBase(membresBase.map(m => m.id === staffForm.id ? { ...staffForm } : m));
-    else setMembresBase([...membresBase, { ...staffForm, id: Date.now() }]);
+    if (staffForm.id) {
+      setMembresBase(membresBase.map(m => m.id === staffForm.id ? { ...staffForm, total: Number(staffForm.total) } : m));
+    } else {
+      setMembresBase([...membresBase, { ...staffForm, id: Date.now(), total: Number(staffForm.total) }]);
+    }
     setStaffForm({ id: null, nom: '', role: 'Palefrenier', total: 25, repos: '' });
     setModalStaffOpen(false);
   };
@@ -144,6 +142,11 @@ export default function App() {
     setModalNoteOpen(false);
   };
 
+  const ouvrirModalConge = (dateStr = '') => {
+    setFormData({ id: null, userId: membresBase?.[0]?.id || '', dateDebut: dateStr || todayStr, dateFin: dateStr || todayStr, periode: 'jour', statut: 'provisoire', category: 'conge' });
+    setModalCongeOpen(true);
+  };
+
   // --- CALENDRIER RENDU ---
   const calendrierRender = useMemo(() => {
     return moisNoms.map((mois, index) => {
@@ -166,17 +169,18 @@ export default function App() {
               const evts = evenements[dStr] || [];
               const abs = congesParDate[dStr] || [];
               const filteredAbs = filtreEmploye ? abs.filter(a => a.userId === filtreEmploye) : abs;
+              const hasConge = filteredAbs.length > 0;
               const isAlerte = !filtreEmploye && abs.filter(c => palefrenierIds.has(c.userId)).length > 2;
 
               let baseClass = "bg-[#F4F6F9]";
-              if (isPast && filteredAbs.length === 0 && evts.length === 0 && !isAlerte) baseClass = "bg-[#E2E8F0] opacity-50";
+              if (isPast && !hasConge && evts.length === 0 && !isAlerte) baseClass = "bg-[#E2E8F0] opacity-50";
 
               return (
                 <div key={idx} onClick={() => { setSelectedDate(dStr); setModalChoiceOpen(dStr); }}
                   className={`h-8 rounded flex items-center justify-center relative cursor-pointer overflow-hidden transition-all 
-                  ${isAlerte ? 'bg-red-500 text-white font-bold' : isToday ? 'bg-amber-100 ring-2 ring-amber-500 z-10 shadow-sm' : baseClass} print:border print:border-gray-100`}>
+                  ${isAlerte ? 'bg-red-500 text-white font-bold' : isToday ? 'bg-amber-100 ring-2 ring-amber-500 z-10' : baseClass} print:border print:border-gray-100`}>
                   
-                  {filteredAbs.length > 0 && !isAlerte && (
+                  {hasConge && !isAlerte && (
                     <div className="absolute inset-0 flex flex-col opacity-100">
                       {[0, 1].map(h => {
                          const match = filteredAbs.filter(a => (h === 0 ? (a.periode === 'matin' || a.periode === 'jour') : (a.periode === 'apres-midi' || a.periode === 'jour')));
@@ -185,20 +189,17 @@ export default function App() {
                          let bg = a.category === 'deplacement' ? "bg-cyan-600" : (a.statut === 'valide' ? "bg-[#1B2A49]" : "bg-transparent");
                          return <div key={h} className={`h-1/2 w-full relative ${bg}`}>
                            {a.statut === 'provisoire' && a.category !== 'deplacement' && (
-                             <div className="absolute inset-0" style={{background: 'repeating-linear-gradient(45deg, #1B2A49, #1B2A49 2px, #22c55e 2px, #22c55e 4px)', opacity: 0.8}}></div>
+                             <div className="absolute inset-0" style={{background: 'repeating-linear-gradient(45deg, #1B2A49, #1B2A49 2px, #22c55e 2px, #22c55e 4px)', opacity: 0.9}}></div>
                            )}
                          </div>;
                       })}
                     </div>
                   )}
-
                   {evts.length > 0 && (
                     <div className="absolute bottom-0 left-0 right-0 flex flex-col z-[30]">
                       {evts.map((e, i) => {
-                         let color = "bg-[#8B5A2B]"; 
-                         if (e.type === 'vacances_ge') color = "bg-blue-500";
-                         if (e.type === 'jour_ferie') color = "bg-purple-600";
-                         return <div key={i} className={`h-[4px] w-full ${color} border-t border-black/10`}></div>;
+                         let c = "bg-[#8B5A2B]"; if (e.type === 'vacances_ge') c = "bg-blue-500"; if (e.type === 'jour_ferie') c = "bg-purple-600";
+                         return <div key={i} className={`h-[4px] w-full ${c} border-t border-black/10`}></div>;
                       })}
                     </div>
                   )}
@@ -212,7 +213,7 @@ export default function App() {
     });
   }, [anneeActuelle, evenements, congesParDate, filtreEmploye, todayStr, palefrenierIds]);
 
-  if (!isLoaded) return <div className="h-screen flex items-center justify-center bg-[#F0F4F8] font-bold">Chargement... 🐴</div>;
+  if (!isLoaded) return <div className="h-screen flex items-center justify-center bg-[#F0F4F8] font-bold text-[#1B2A49]">Chargement du planning... 🐴</div>;
 
   return (
     <div className="min-h-screen bg-[#F0F4F8] text-[#1B2A49]">
@@ -232,33 +233,45 @@ export default function App() {
 
       <div className="flex h-screen flex-mobile overflow-hidden print:block print:h-auto">
         
-        {/* SIDEBAR */}
+        {/* SIDEBAR DESIGN IMAGE */}
         <aside className="w-80 side-mobile bg-[#1B2A49] flex flex-col print:hidden shrink-0 shadow-xl relative z-50 text-white">
           <div className="p-6 bg-[#141D36] flex flex-col items-center border-b-4 border-[#8DC63F]">
             <img src="/logo.png" alt="Logo" className="w-20 h-20 mb-3 bg-white rounded-full p-1 shadow-lg" />
             <h2 className="text-[10px] font-extrabold uppercase tracking-widest text-[#1B2A49] bg-[#8DC63F] px-3 py-1 rounded mb-1 text-center w-full">Organisation des équipes écuries</h2>
-            <h1 className="text-xl font-bold text-white/90 uppercase tracking-tighter text-center">Poney Club Presinge</h1>
           </div>
 
           <div className="p-4 bg-[#141D36]/50 space-y-3 shrink-0">
-             <button onClick={() => setModalStaffOpen(true)} className="w-full bg-[#1B2A49] text-[#8DC63F] border border-[#8DC63F]/30 font-bold py-2 rounded-xl text-xs flex items-center justify-center gap-2 hover:bg-[#2A3C5E] transition-all shadow-md"><Settings size={14}/> Configuration Équipe</button>
-             <button onClick={() => ouvrirModalConge()} className="w-full bg-[#8DC63F] text-[#1B2A49] font-black py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg hover:scale-105 transition-all uppercase tracking-tighter"><Plus size={20}/> Saisir Absence</button>
+             <button onClick={() => setModalStaffOpen(true)} className="w-full bg-white/10 text-[#8DC63F] border border-[#8DC63F]/30 font-black py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 hover:bg-white/20 transition-all"><Settings size={14}/> Configuration Équipe</button>
+             <button onClick={() => ouvrirModalConge()} className="w-full bg-[#8DC63F] text-[#1B2A49] font-black py-3.5 rounded-xl flex items-center justify-center gap-2 shadow-lg hover:scale-105 transition-all uppercase tracking-tighter"><Plus size={20}/> Saisir Absence</button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <div className="flex-1 overflow-y-auto p-4 space-y-6">
              <button onClick={() => setFiltreEmploye(null)} className={`w-full text-left p-2 rounded-lg text-[10px] font-black uppercase transition-all ${filtreEmploye === null ? 'bg-[#8DC63F] text-[#1B2A49]' : 'text-white/30 hover:text-white'}`}>
                 <div className="flex items-center gap-2"><FilterX size={14}/> Voir toute l'équipe</div>
              </button>
-             {membresBase?.map(m => (
-                <div key={m.id} onClick={() => setFiltreEmploye(filtreEmploye === m.id ? null : m.id)}
-                  className={`p-2 rounded-lg mb-1 border cursor-pointer flex justify-between items-center transition-all ${filtreEmploye === m.id ? 'bg-[#8DC63F] text-[#1B2A49] font-bold shadow-lg' : 'bg-[#213459] text-white/80 border-transparent hover:bg-[#2A406D]'}`}>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-semibold">{m.nom}</span>
-                    <span className="text-[9px] font-bold uppercase opacity-30">{m.role}</span>
-                  </div>
-                  {m.total > 0 && <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${m.pris >= m.total ? 'bg-red-500 text-white' : 'bg-[#141D36] text-[#8DC63F]'}`}>{m.pris}/{m.total}</span>}
-                </div>
-             ))}
+
+             {rolesDisponibles.map(role => {
+               const mm = equipeCalculee.filter(m => m.role === role);
+               if (!mm.length) return null;
+               return (
+                 <div key={role} className="space-y-2">
+                   <h4 className="text-[10px] text-white/40 font-bold uppercase tracking-widest pl-1">{role}s</h4>
+                   {mm.map(m => {
+                     const isSelected = filtreEmploye === m.id;
+                     return (
+                        <div key={m.id} onClick={() => setFiltreEmploye(isSelected ? null : m.id)}
+                          className={`p-3 rounded-xl flex justify-between items-center transition-all cursor-pointer shadow-sm ${isSelected ? 'bg-[#8DC63F] text-[#1B2A49] font-bold scale-[1.03]' : 'bg-[#213459] text-white/90 border-transparent hover:bg-[#2A406D]'}`}>
+                          <div className="flex flex-col">
+                            <span className="text-sm font-bold">{m.nom}</span>
+                            <span className={`text-[10px] font-medium ${isSelected ? 'text-[#1B2A49]/60' : 'text-[#8A9BAE]'}`}>Off: {m.repos || '-'}</span>
+                          </div>
+                          {m.total > 0 && <span className={`text-[11px] font-mono px-2 py-0.5 rounded-lg ${isSelected ? 'bg-[#1B2A49]/10' : 'bg-[#141D36]'}`}>{m.pris}/{m.total}</span>}
+                        </div>
+                     );
+                   })}
+                 </div>
+               );
+             })}
           </div>
         </aside>
 
@@ -276,16 +289,16 @@ export default function App() {
                 {new Date(selectedDate).toLocaleDateString('fr-CH', {weekday:'long', day:'numeric', month:'long'})}
               </h3>
               <div className="flex flex-wrap justify-center gap-3 items-center">
-                 {eventsJour.map(e => <span key={e.id} className="text-[11px] font-black bg-black/10 px-2 rounded">🚩 {e.titre}</span>)}
+                 {eventsJour.map(e => <span key={e.id} className="text-[11px] font-black bg-black/10 px-2 rounded-full shadow-sm">🚩 {e.titre}</span>)}
                  {absentsJour.map(c => (
-                   <span key={c.id} className={`text-[11px] font-bold px-2 rounded shadow-sm ${c.statut === 'provisoire' ? 'bg-yellow-400 text-black border border-black/20' : 'bg-[#1B2A49] text-white'}`}>{membresBase.find(u=>u.id===c.userId)?.nom} ({c.category === 'conge' ? '🏝️' : '✈️'})</span>
+                   <span key={c.id} className={`text-[11px] font-bold px-2 rounded shadow-sm ${c.statut === 'provisoire' ? 'bg-yellow-400 text-black shadow-sm' : 'bg-[#1B2A49] text-white'}`}>{membresBase.find(u=>u.id===c.userId)?.nom}</span>
                  ))}
                  {notes[selectedDate] ? (
-                   <button onClick={() => { setNoteText(notes[selectedDate]); setModalNoteOpen(true); }} className="bg-yellow-400 text-[#1B2A49] text-[11px] px-3 py-1 rounded-lg border-2 border-yellow-500 font-black flex items-center gap-2 shadow-md uppercase italic">
+                   <button onClick={() => { setNoteText(notes[selectedDate]); setModalNoteOpen(true); }} className="bg-yellow-400 text-[#1B2A49] text-[11px] px-3 py-1 rounded-lg border-2 border-yellow-500 font-black flex items-center gap-2 shadow-md">
                      <StickyNote size={14}/> {notes[selectedDate]}
                    </button>
                  ) : (
-                   <button onClick={() => { setNoteText(''); setModalNoteOpen(true); }} className="text-[10px] font-bold text-[#1B2A49]/40 hover:text-[#1B2A49] underline">+ Ajouter Note</button>
+                   <button onClick={() => { setNoteText(''); setModalNoteOpen(true); }} className="text-[10px] font-bold text-[#1B2A49]/40 hover:text-[#1B2A49] underline tracking-tighter">+ Ajouter Note</button>
                  )}
               </div>
             </div>
@@ -293,13 +306,13 @@ export default function App() {
             <button onClick={() => window.print()} className="p-4 bg-[#1B2A49] text-[#8DC63F] rounded-2xl shadow-xl hover:scale-105 transition-transform"><Printer size={28}/></button>
           </header>
 
-          <div className="bg-white px-8 py-2.5 flex justify-center gap-10 border-b text-[10px] font-black uppercase tracking-wider print:hidden">
-            <div className="flex items-center gap-2"><div className="w-4 h-4 bg-[#1B2A49] rounded-sm shadow-sm"></div> Validé</div>
-            <div className="flex items-center gap-2"><div className="w-4 h-4 bg-cyan-600 rounded-sm shadow-sm"></div> Déplacement</div>
-            <div className="flex items-center gap-2"><div className="w-4 h-4" style={{background: 'repeating-linear-gradient(45deg, #1B2A49, #1B2A49 2px, #22c55e 2px, #22c55e 4px)'}}></div> Provisoire</div>
-            <div className="flex items-center gap-2"><div className="w-4 h-1.5 bg-[#8B5A2B] rounded-full shadow-sm"></div> Concours</div>
-            <div className="flex items-center gap-2"><div className="w-4 h-1.5 bg-blue-500 rounded-full shadow-sm"></div> Vacances GE</div>
-            <div className="flex items-center gap-2"><div className="w-4 h-1.5 bg-purple-600 rounded-full shadow-sm"></div> J. Férié</div>
+          <div className="bg-white px-8 py-2.5 flex justify-center gap-8 border-b text-[10px] font-black uppercase tracking-wider print:hidden shadow-inner">
+            <div className="flex items-center gap-1.5"><div className="w-4 h-4 bg-[#1B2A49] rounded-sm shadow-sm"></div> Validé</div>
+            <div className="flex items-center gap-1.5"><div className="w-4 h-4 bg-cyan-600 rounded-sm shadow-sm"></div> Déplacement</div>
+            <div className="flex items-center gap-1.5"><div className="w-4 h-4 border border-[#1B2A49] striped-provisoire" style={{background: 'repeating-linear-gradient(45deg, #1B2A49, #1B2A49 2px, #22c55e 2px, #22c55e 4px)'}}></div> Provisoire</div>
+            <div className="flex items-center gap-1.5"><div className="w-4 h-1.5 bg-[#8B5A2B] rounded-sm shadow-sm"></div> Concours</div>
+            <div className="flex items-center gap-1.5"><div className="w-4 h-1.5 bg-blue-500 rounded-sm shadow-sm"></div> Vacances GE</div>
+            <div className="flex items-center gap-1.5"><div className="w-4 h-1.5 bg-purple-600 rounded-sm shadow-sm"></div> J. Férié</div>
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 grid-print">
@@ -324,16 +337,16 @@ export default function App() {
                   <input type="date" className="border-2 p-3 rounded-2xl font-bold" value={formData.dateDebut} onChange={e => setFormData({...formData, dateDebut: e.target.value})} required/>
                   <input type="date" className="border-2 p-3 rounded-2xl font-bold" value={formData.dateFin} onChange={e => setFormData({...formData, dateFin: e.target.value})}/>
                 </div>
-                <select className="w-full border-2 p-3 rounded-2xl font-black" value={formData.userId} onChange={e => setFormData({...formData, userId: e.target.value})} required>
-                  {membresBase?.map(m => <option key={m.id} value={m.id}>{m.nom} ({m.role})</option>)}
+                <select className="w-full border-2 p-3 rounded-2xl font-black text-[#1B2A49]" value={formData.userId} onChange={e => setFormData({...formData, userId: e.target.value})} required>
+                  {membresBase?.map(m => <option key={m.id} value={m.id}>{m.nom}</option>)}
                 </select>
                 {formData.category === 'conge' && (
-                  <div className="flex gap-4 p-3 bg-gray-100 rounded-2xl justify-around">
+                  <div className="flex gap-4 p-3 bg-gray-100 rounded-2xl justify-around border-2 border-dashed border-[#D0D7E1]">
                     <label className="flex items-center gap-2 cursor-pointer font-bold"><input type="radio" checked={formData.statut === 'provisoire'} onChange={() => setFormData({...formData, statut:'provisoire'})}/> PROVISOIRE</label>
                     <label className="flex items-center gap-2 cursor-pointer font-black text-green-700"><input type="radio" checked={formData.statut === 'valide'} onChange={() => setFormData({...formData, statut:'valide'})}/> VALIDÉ</label>
                   </div>
                 )}
-                <button type="submit" className="w-full bg-[#1B2A49] text-white py-4 rounded-xl font-black text-lg shadow-xl uppercase">Valider</button>
+                <button type="submit" className="w-full bg-[#1B2A49] text-white py-4 rounded-xl font-black text-lg shadow-xl uppercase">Enregistrer</button>
               </form>
             </div>
           </div>
@@ -343,42 +356,81 @@ export default function App() {
         {modalNoteOpen && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[110] p-4 text-[#1B2A49]">
              <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden border-4 border-yellow-400 shadow-2xl">
-                <div className="p-4 bg-yellow-400 text-black font-black flex justify-between uppercase">
-                   <span>Post-it</span>
+                <div className="p-4 bg-yellow-400 text-black font-black flex justify-between uppercase italic">
+                   <span>Post-it du jour</span>
                    <X className="cursor-pointer" onClick={() => setModalNoteOpen(false)}/>
                 </div>
-                <form onSubmit={handleSaveNote} className="p-6 space-y-4">
+                <form onSubmit={handleSaveNote} className="p-6 space-y-4 text-center">
                    <textarea autoFocus className="w-full border-2 border-yellow-100 p-4 rounded-2xl bg-yellow-50 outline-none h-32 font-bold" 
-                    value={noteText || ""} onChange={e => setNoteText(e.target.value)} placeholder="Notez ici..."/>
+                    value={noteText || ""} onChange={e => setNoteText(e.target.value)} placeholder="Taper ici..."/>
                    <div className="flex gap-2">
                      <button type="button" onClick={() => { setNoteText(""); setNotes(p=>{const n={...p};delete n[selectedDate];return n;}); setModalNoteOpen(false); }} className="p-4 bg-red-100 text-red-600 rounded-2xl hover:bg-red-200 transition-colors shadow-sm"><Trash2/></button>
-                     <button type="submit" className="flex-1 bg-yellow-400 text-black py-4 rounded-2xl font-black shadow-lg">Valider</button>
+                     <button type="submit" className="flex-1 bg-yellow-400 text-black py-4 rounded-2xl font-black shadow-lg uppercase tracking-tighter">Valider</button>
                    </div>
                 </form>
              </div>
           </div>
         )}
 
-        {/* MODAL CHOICE */}
+        {/* MODAL STAFF */}
+        {modalStaffOpen && (
+          <div className="fixed inset-0 bg-[#1B2A49]/95 backdrop-blur-sm flex items-center justify-center z-[110] p-4 print:hidden text-[#1B2A49]">
+            <div className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl border-b-8 border-[#8DC63F]">
+              <div className="bg-[#1B2A49] p-5 text-white flex justify-between items-center border-b-4 border-[#8DC63F]">
+                <h3 className="uppercase tracking-widest flex items-center gap-2 font-bold text-lg">Paramètres Personnel</h3>
+                <X className="cursor-pointer" onClick={() => setModalStaffOpen(false)}/>
+              </div>
+              <div className="flex flex-col md:flex-row max-h-[80vh] overflow-y-auto">
+                 <div className="p-8 md:w-1/2 bg-gray-50 border-r border-gray-100">
+                    <form onSubmit={handleSaveStaff} className="space-y-4 text-[#1B2A49]">
+                       <input type="text" className="w-full border-2 p-3 rounded-2xl font-bold outline-none" value={staffForm.nom} onChange={e => setStaffForm({...staffForm, nom: e.target.value})} required placeholder="Prénom Nom"/>
+                       <select className="w-full border-2 p-3 rounded-2xl bg-white font-black" value={staffForm.role} onChange={e => setStaffForm({...staffForm, role: e.target.value})}>
+                          {rolesDisponibles.map(r => <option key={r} value={r}>{r}</option>)}
+                       </select>
+                       <div className="flex gap-2">
+                          <input type="number" className="w-1/2 border-2 p-3 rounded-2xl font-bold" value={staffForm.total} onChange={e => setStaffForm({...staffForm, total: e.target.value})} placeholder="Vac/an"/>
+                          <input type="text" className="w-1/2 border-2 p-3 rounded-2xl font-bold" value={staffForm.repos} onChange={e => setStaffForm({...staffForm, repos: e.target.value})} placeholder="Repos (Off)"/>
+                       </div>
+                       <button type="submit" className="w-full bg-[#8DC63F] text-[#1B2A49] font-black py-4 rounded-2xl shadow-xl uppercase">Mise à jour</button>
+                    </form>
+                 </div>
+                 <div className="p-8 md:w-1/2 overflow-y-auto">
+                    <div className="space-y-2">
+                       {membresBase?.map(m => (
+                         <div key={m.id} className="flex justify-between items-center p-3 border-2 border-gray-100 rounded-2xl hover:bg-gray-50 transition-all">
+                            <span className="text-sm font-black">{m.nom}</span>
+                            <div className="flex gap-1">
+                               <button onClick={() => setStaffForm(m)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"><Edit size={14}/></button>
+                               <button onClick={() => { if(window.confirm(`Supprimer ${m.nom} ?`)) setMembresBase(membresBase.filter(x => x.id !== m.id)); }} className="p-2 text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={14}/></button>
+                            </div>
+                         </div>
+                       ))}
+                    </div>
+                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL CHOICE / CLIC JOUR */}
         {modalChoiceOpen && (
           <div className="fixed inset-0 bg-black/70 flex items-end md:items-center justify-center z-[110] p-4 print:hidden text-[#1B2A49]">
             <div className="bg-white rounded-t-3xl md:rounded-3xl w-full max-w-sm p-6 space-y-4 border-t-8 border-[#8DC63F] shadow-2xl relative">
               <h4 className="text-center font-black border-b pb-3 uppercase text-lg">{new Date(modalChoiceOpen).toLocaleDateString('fr-CH', {weekday:'long', day:'numeric', month:'long'})}</h4>
-              <button onClick={() => ouvrirModalConge(modalChoiceOpen)} className="w-full py-4 bg-[#8DC63F] text-[#1B2A49] font-black rounded-2xl flex items-center justify-center gap-2 shadow-md hover:scale-105 transition-transform uppercase tracking-tighter">Absence / Déplacement</button>
+              <button onClick={() => { setFormData({ ...formData, dateDebut: modalChoiceOpen, dateFin: modalChoiceOpen, userId: membresBase?.[0]?.id }); setModalCongeOpen(true); setModalChoiceOpen(null); }} className="w-full py-4 bg-[#8DC63F] text-[#1B2A49] font-black rounded-2xl flex items-center justify-center gap-2 shadow-md hover:scale-105 transition-transform uppercase">Absence / Déplacement</button>
               <button onClick={() => { setEvtForm({dateDebut: modalChoiceOpen, dateFin: modalChoiceOpen, titre: '', type: 'concours_oui'}); setModalEvtOpen(true); setModalChoiceOpen(null); }} className="w-full py-4 bg-[#1B2A49] text-white rounded-2xl font-black flex items-center justify-center gap-2 shadow-md hover:scale-105 transition-transform uppercase border-2 border-[#8DC63F]">Événement Club</button>
               
               <div className="pt-2 max-h-40 overflow-y-auto space-y-1 text-center">
                  {evenements[modalChoiceOpen]?.map(e => (
-                   <button key={e.id} onClick={() => { const nx = {...evenements}; nx[modalChoiceOpen] = nx[modalChoiceOpen].filter(x => x.id !== e.id); if(!nx[modalChoiceOpen].length) delete nx[modalChoiceOpen]; setEvenements(nx); setModalChoiceOpen(null); }} className="w-full bg-red-50 text-red-700 text-[10px] py-1.5 rounded-lg flex items-center justify-center gap-2 border border-red-100 uppercase font-bold tracking-tighter shadow-sm"><Trash2 size={12}/> Supprimer {e.titre}</button>
+                   <button key={e.id} onClick={() => { const nx={...evenements}; nx[modalChoiceOpen]=nx[modalChoiceOpen].filter(x=>x.id!==e.id); if(!nx[modalChoiceOpen].length) delete nx[modalChoiceOpen]; setEvenements(nx); setModalChoiceOpen(null); }} className="w-full bg-red-50 text-red-700 text-[10px] py-1.5 rounded-lg flex items-center justify-center gap-2 border border-red-100 uppercase font-bold tracking-tighter shadow-sm"><Trash2 size={12}/> Supprimer {e.titre}</button>
                  ))}
-                 {absentsJour.map(a => (
+                 {(congesParDate[modalChoiceOpen] || []).map(a => (
                    <div key={a.id} className="flex gap-1">
                       <button onClick={() => { setConges(conges.filter(x => x.id !== a.id)); setModalChoiceOpen(null); }} className="flex-1 bg-orange-50 text-orange-800 text-[10px] py-1.5 rounded-lg flex items-center justify-center gap-1 border border-orange-100 uppercase font-bold tracking-tighter"><Trash2 size={12}/> {membresBase?.find(u=>u.id===a.userId)?.nom} - {a.category}</button>
-                      {a.groupId && <button onClick={() => { if(window.confirm("Supprimer toute la période ?")){ setConges(conges.filter(x=>x.groupId!==a.groupId)); setModalChoiceOpen(null); } }} className="bg-red-700 text-white text-[9px] px-2 rounded-lg font-black uppercase shadow-sm">Période</button>}
                    </div>
                  ))}
               </div>
-              <button onClick={() => setModalChoiceOpen(null)} className="w-full py-2 text-gray-400 font-black uppercase text-[10px]">Annuler</button>
+              <button onClick={() => setModalChoiceOpen(null)} className="w-full py-2 text-gray-400 font-black uppercase text-[10px]">Fermer</button>
             </div>
           </div>
         )}
@@ -404,42 +456,6 @@ export default function App() {
                 </select>
                 <button type="submit" className="w-full bg-[#8B5A2B] text-white py-4 rounded-xl font-black shadow-xl uppercase">Ajouter</button>
               </form>
-            </div>
-          </div>
-        )}
-
-        {/* MODAL STAFF */}
-        {modalStaffOpen && (
-          <div className="fixed inset-0 bg-[#1B2A49]/95 backdrop-blur-sm flex items-center justify-center z-[110] p-4 print:hidden text-[#1B2A49]">
-            <div className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl border-b-8 border-[#8DC63F]">
-              <div className="bg-[#1B2A49] p-5 text-white flex justify-between items-center font-black border-b-4 border-[#8DC63F]">
-                <h3 className="uppercase tracking-widest flex items-center gap-2 font-bold text-lg">Paramètres Personnel</h3>
-                <X className="cursor-pointer" onClick={() => setModalStaffOpen(false)}/>
-              </div>
-              <div className="flex flex-col md:flex-row max-h-[80vh] overflow-y-auto">
-                 <div className="p-8 md:w-1/2 bg-gray-50 border-r border-gray-100">
-                    <form onSubmit={handleSaveStaff} className="space-y-4">
-                       <input type="text" className="w-full border-2 p-3 rounded-2xl font-bold outline-none text-[#1B2A49]" value={staffForm.nom} onChange={e => setStaffForm({...staffForm, nom: e.target.value})} required placeholder="Nom"/>
-                       <select className="w-full border-2 p-3 rounded-2xl bg-white font-black text-[#1B2A49]" value={staffForm.role} onChange={e => setStaffForm({...staffForm, role: e.target.value})}>
-                          {rolesDisponibles.map(r => <option key={r} value={r}>{r}</option>)}
-                       </select>
-                       <button type="submit" className="w-full bg-[#8DC63F] text-[#1B2A49] font-black py-4 rounded-2xl shadow-xl uppercase">Enregistrer</button>
-                    </form>
-                 </div>
-                 <div className="p-8 md:w-1/2 overflow-y-auto">
-                    <div className="space-y-2">
-                       {membresBase?.map(m => (
-                         <div key={m.id} className="flex justify-between items-center p-3 border-2 border-gray-100 rounded-2xl hover:bg-gray-50 transition-all">
-                            <span className="text-sm font-black text-[#1B2A49]">{m.nom}</span>
-                            <div className="flex gap-1">
-                               <button onClick={() => setStaffForm(m)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"><Edit size={14}/></button>
-                               <button onClick={() => { if(window.confirm(`Supprimer ${m.nom} ?`)) setMembresBase(membresBase.filter(x => x.id !== m.id)); }} className="p-2 text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={14}/></button>
-                            </div>
-                         </div>
-                       ))}
-                    </div>
-                 </div>
-              </div>
             </div>
           </div>
         )}
