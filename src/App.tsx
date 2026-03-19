@@ -1,14 +1,13 @@
 // @ts-nocheck
 import React, { useState, useEffect, useMemo } from 'react';
-import { Calendar as CalendarIcon, MapPin, Award, Trash2, X, Plus, AlertCircle, Users, Tent, ChevronLeft, ChevronRight, Settings, Edit, Flag, StickyNote, Printer } from 'lucide-react';
+import { Calendar as CalendarIcon, MapPin, Award, Trash2, X, Plus, AlertCircle, Users, Tent, ChevronLeft, ChevronRight, Settings, Edit, Flag, StickyNote, Printer, Briefcase } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
-// --- CONNEXION À SUPABASE ---
+// --- CONFIGURATION SUPABASE ---
 const supabaseUrl = 'https://lnwvlyswsmtafyoepovq.supabase.co';
 const supabaseKey = 'sb_publishable_azT_rAkqeE-zsnvolYSY9w_7MtlnBVI';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// --- DONNÉES PAR DÉFAUT ---
 const defaultEquipe = [
   { id: 1, nom: "Marc", role: "Palefrenier", total: 25, repos: "Lundi, Mardi" },
   { id: 2, nom: "Sophie", role: "Palefrenier", total: 25, repos: "Mercredi" },
@@ -23,12 +22,10 @@ export default function App() {
   const todayObj = new Date();
   const todayStr = `${todayObj.getFullYear()}-${String(todayObj.getMonth() + 1).padStart(2, '0')}-${String(todayObj.getDate()).padStart(2, '0')}`;
 
-  // --- ÉTATS ---
   const [isLoaded, setIsLoaded] = useState(false);
   const [anneeActuelle, setAnneeActuelle] = useState(2026);
   const [dateDuJour, setDateDuJour] = useState("");
   const [selectedDate, setSelectedDate] = useState(todayStr);
-  
   const [membresBase, setMembresBase] = useState(defaultEquipe);
   const [conges, setConges] = useState([]);
   const [evenements, setEvenements] = useState({});
@@ -41,12 +38,11 @@ export default function App() {
   const [modalNoteOpen, setModalNoteOpen] = useState(false);
   const [modalChoiceOpen, setModalChoiceOpen] = useState(null);
   
-  const [formData, setFormData] = useState({ id: null, userId: '', dateDebut: '', dateFin: '', periode: 'jour', statut: 'provisoire' });
+  const [formData, setFormData] = useState({ id: null, userId: '', dateDebut: '', dateFin: '', periode: 'jour', statut: 'provisoire', category: 'conge' });
   const [staffForm, setStaffForm] = useState({ id: null, nom: '', role: 'Palefrenier', total: 25, repos: '' });
   const [evtForm, setEvtForm] = useState({ dateDebut: '', dateFin: '', titre: '', type: 'concours_oui' });
   const [noteText, setNoteText] = useState("");
 
-  // --- CHARGEMENT DEPUIS SUPABASE ---
   useEffect(() => {
     async function chargerDonnees() {
       const { data, error } = await supabase.from('app_state').select('*');
@@ -73,20 +69,22 @@ export default function App() {
     setDateDuJour(new Date().toLocaleDateString('fr-CH', options));
   }, []);
 
-  // --- SAUVEGARDE AUTOMATIQUE VERS SUPABASE ---
   useEffect(() => { if (isLoaded) supabase.from('app_state').upsert({ id: 'poney_equipe', data: membresBase }).then(); }, [membresBase, isLoaded]);
   useEffect(() => { if (isLoaded) supabase.from('app_state').upsert({ id: 'poney_conges', data: conges }).then(); }, [conges, isLoaded]);
   useEffect(() => { if (isLoaded) supabase.from('app_state').upsert({ id: 'poney_evenements', data: evenements }).then(); }, [evenements, isLoaded]);
   useEffect(() => { if (isLoaded) supabase.from('app_state').upsert({ id: 'poney_notes', data: notes }).then(); }, [notes, isLoaded]);
   useEffect(() => { if (isLoaded) supabase.from('app_state').upsert({ id: 'poney_annee', data: anneeActuelle.toString() }).then(); }, [anneeActuelle, isLoaded]);
 
-  // --- CALCULS ---
   const palefrenierIds = useMemo(() => new Set(membresBase.filter(m => m.role === 'Palefrenier').map(m => m.id)), [membresBase]);
 
   const equipeCalculee = useMemo(() => {
     return membresBase.map(membre => {
-      const sesConges = conges.filter(c => c.userId === membre.id && c.date.startsWith(anneeActuelle.toString()));
-      const joursPris = sesConges.reduce((total, conge) => total + (conge.periode === 'jour' ? 1 : 0.5), 0);
+      const sesAbsences = conges.filter(c => c.userId === membre.id && c.date.startsWith(anneeActuelle.toString()));
+      // LOGIQUE METIER : Seuls les 'conge' décomptent du solde
+      const joursPris = sesAbsences.reduce((total, entry) => {
+        if (entry.category === 'deplacement') return total; 
+        return total + (entry.periode === 'jour' ? 1 : 0.5);
+      }, 0);
       return { ...membre, pris: joursPris };
     });
   }, [membresBase, conges, anneeActuelle]);
@@ -102,44 +100,22 @@ export default function App() {
   const isAlertePalefrenierHeader = palefreniersAbsentsSel.length > 2;
   const evtsSelectionnes = evenements[selectedDate] || [];
 
-  // --- ACTIONS ---
+  // --- HANDLERS ---
   const sauvegarderStaff = (e) => {
     e.preventDefault();
     if (staffForm.id) setMembresBase(membresBase.map(m => m.id === staffForm.id ? { ...staffForm, total: Number(staffForm.total) } : m));
     else setMembresBase([...membresBase, { ...staffForm, id: Date.now(), total: Number(staffForm.total) }]);
     setStaffForm({ id: null, nom: '', role: 'Palefrenier', total: 25, repos: '' });
   };
-  const editerStaff = (membre) => setStaffForm(membre);
-  const supprimerStaff = (id) => {
-    if (window.confirm("Supprimer ce membre ? Ses congés seront aussi supprimés.")) {
-      setMembresBase(membresBase.filter(m => m.id !== id));
-      setConges(conges.filter(c => c.userId !== id));
-      if (filtreEmploye === id) setFiltreEmploye(null);
-    }
-  };
 
   const ouvrirModalConge = (dateStr = '', congeExistant = null) => {
-    if (congeExistant) setFormData({ ...congeExistant, dateDebut: congeExistant.date, dateFin: congeExistant.date });
-    else setFormData({ id: null, userId: membresBase[0]?.id || '', dateDebut: dateStr, dateFin: dateStr, periode: 'jour', statut: 'provisoire' });
+    if (congeExistant) setFormData({ ...congeExistant, dateDebut: congeExistant.date, dateFin: congeExistant.date, category: congeExistant.category || 'conge' });
+    else setFormData({ id: null, userId: membresBase[0]?.id || '', dateDebut: dateStr, dateFin: dateStr, periode: 'jour', statut: 'provisoire', category: 'conge' });
     setModalCongeOpen(true);
   };
 
   const sauvegarderConge = (e) => {
     e.preventDefault();
-    if (formData.statut === 'valide') {
-      let aUnConflit = false;
-      let dateCouranteCheck = new Date(formData.dateDebut);
-      const dateFinObjCheck = new Date(formData.dateFin || formData.dateDebut);
-      while (dateCouranteCheck <= dateFinObjCheck) {
-        const dateStrCheck = `${dateCouranteCheck.getFullYear()}-${String(dateCouranteCheck.getMonth() + 1).padStart(2, '0')}-${String(dateCouranteCheck.getDate()).padStart(2, '0')}`;
-        if (evenements[dateStrCheck] && evenements[dateStrCheck].some(evt => evt.type === 'concours_oui')) {
-          aUnConflit = true; break;
-        }
-        dateCouranteCheck.setDate(dateCouranteCheck.getDate() + 1);
-      }
-      if (aUnConflit && !window.confirm("⚠️ ATTENTION : Ce congé tombe pendant un CONCOURS du club.\n\nVoulez-vous vraiment le valider ?")) return;
-    }
-
     if (formData.id) {
       setConges(conges.map(c => c.id === formData.id ? { ...formData, userId: Number(formData.userId), date: formData.dateDebut } : c));
     } else {
@@ -148,7 +124,7 @@ export default function App() {
       const dateFinObj = new Date(formData.dateFin || formData.dateDebut);
       while (dateCourante <= dateFinObj) {
         const dateStr = `${dateCourante.getFullYear()}-${String(dateCourante.getMonth() + 1).padStart(2, '0')}-${String(dateCourante.getDate()).padStart(2, '0')}`;
-        nouveauxConges.push({ id: Date.now() + Math.random(), userId: Number(formData.userId), date: dateStr, periode: formData.dateDebut !== formData.dateFin ? 'jour' : formData.periode, statut: formData.statut });
+        nouveauxConges.push({ id: Date.now() + Math.random(), userId: Number(formData.userId), date: dateStr, periode: formData.dateDebut !== formData.dateFin ? 'jour' : formData.periode, statut: formData.statut, category: formData.category });
         dateCourante.setDate(dateCourante.getDate() + 1);
       }
       setConges([...conges, ...nouveauxConges]);
@@ -157,15 +133,10 @@ export default function App() {
   };
 
   const supprimerConge = () => {
-    if (window.confirm("Supprimer ce congé ?")) {
+    if (window.confirm("Supprimer cette entrée ?")) {
       setConges(conges.filter(c => c.id !== formData.id));
       setModalCongeOpen(false);
     }
-  };
-
-  const ouvrirModalEvt = (dateStr = '') => {
-    setEvtForm({ dateDebut: dateStr, dateFin: dateStr, titre: '', type: 'concours_oui' });
-    setModalEvtOpen(true);
   };
 
   const sauvegarderEvenement = (e) => {
@@ -183,128 +154,61 @@ export default function App() {
     setModalEvtOpen(false);
   };
 
-  const supprimerEvenement = (dateStr, evtId) => {
-    if (window.confirm(`Voulez-vous supprimer cet événement ?`)) {
-      const nouveauxEvts = { ...evenements };
-      nouveauxEvts[dateStr] = nouveauxEvts[dateStr].filter(e => e.id !== evtId);
-      if (nouveauxEvts[dateStr].length === 0) delete nouveauxEvts[dateStr];
-      setEvenements(nouveauxEvts);
-    }
-  };
-
-  const sauvegarderNote = (e) => {
-    e.preventDefault();
-    const newNotes = { ...notes };
-    if (noteText.trim() === "") delete newNotes[selectedDate];
-    else newNotes[selectedDate] = noteText;
-    setNotes(newNotes);
-    setModalNoteOpen(false);
-  };
-
-  const getJoursMois = (mois, annee) => {
-    const date = new Date(annee, mois, 1);
-    const jours = [];
-    let jourSemaine = date.getDay() === 0 ? 6 : date.getDay() - 1;
-    for (let i = 0; i < jourSemaine; i++) jours.push(null);
-    while (date.getMonth() === mois) { jours.push(new Date(date)); date.setDate(date.getDate() + 1); }
-    return jours;
-  };
-
-  const getColorClassForEvent = (type) => {
-    if (type === 'concours_oui') return "bg-[#8B5A2B]";
-    if (type === 'concours_non') return "bg-gray-500";
-    if (type === 'vacances_ge') return "bg-blue-500";
-    if (type === 'jour_ferie') return "bg-purple-500";
-    return "bg-black";
-  };
-
-  // --- CALENDRIER MÉMOISÉ ---
   const calendrierMemoise = useMemo(() => {
     return moisNoms.map((mois, index) => {
-      const jours = getJoursMois(index, anneeActuelle);
+      const date = new Date(anneeActuelle, index, 1);
+      const jours = [];
+      let jourSemaine = date.getDay() === 0 ? 6 : date.getDay() - 1;
+      for (let i = 0; i < jourSemaine; i++) jours.push(null);
+      while (date.getMonth() === index) { jours.push(new Date(date)); date.setDate(date.getDate() + 1); }
+
       return (
-        <div key={mois} className="bg-white/95 backdrop-blur-sm rounded-xl shadow-sm border border-[#D0D7E1] overflow-hidden break-inside-avoid print:border-gray-300 print:shadow-none">
+        <div key={mois} className="bg-white rounded-xl shadow-sm border border-[#D0D7E1] overflow-hidden break-inside-avoid print:border-gray-300 print:shadow-none">
           <div className="bg-[#EBF2E1] py-2 text-center font-bold text-[#1B2A49] print:bg-gray-100 print:border-b print:border-gray-300">{mois}</div>
-          <div className="p-3">
-            <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-[#6B7A99] mb-2 print:text-black">
+          <div className="p-2">
+            <div className="grid grid-cols-7 gap-1 text-center text-[9px] font-bold text-[#6B7A99] mb-1 print:text-black">
               <div>LU</div><div>MA</div><div>ME</div><div>JE</div><div>VE</div><div>SA</div><div>DI</div>
             </div>
             <div className="grid grid-cols-7 gap-1">
               {jours.map((jour, jIndex) => {
                 if (!jour) return <div key={`empty-${jIndex}`} className="h-8 print:h-6"></div>;
                 const dateStr = `${jour.getFullYear()}-${String(jour.getMonth() + 1).padStart(2, '0')}-${String(jour.getDate()).padStart(2, '0')}`;
-                
-                const isPast = dateStr < todayStr;
                 const isToday = dateStr === todayStr;
-
                 const evtsDuJour = evenements[dateStr] || [];
                 let congesDuJour = congesParDate[dateStr] || [];
-                if (filtreEmploye) {
-                  congesDuJour = congesDuJour.filter(c => c.userId === filtreEmploye);
-                }
+                if (filtreEmploye) congesDuJour = congesDuJour.filter(c => c.userId === filtreEmploye);
+                
                 const hasConge = congesDuJour.length > 0;
-                const noteDuJour = notes[dateStr];
+                const isAlertePalefrenierCell = !filtreEmploye && (congesParDate[dateStr] || []).filter(c => palefrenierIds.has(c.userId)).length > 2;
 
-                const palefreniersAbsentsCell = (congesParDate[dateStr] || []).filter(c => palefrenierIds.has(c.userId));
-                const isAlertePalefrenierCell = !filtreEmploye && palefreniersAbsentsCell.length > 2;
-                
-                let baseClass = "bg-[#F4F6F9] hover:bg-[#EBF2E1] text-[#1B2A49]";
-                let borderClass = ""; 
-                let icon = null;
-                
-                if (isPast && !hasConge && evtsDuJour.length === 0 && !isAlertePalefrenierCell) {
-                  baseClass = "bg-[#F4F6F9]/50 text-gray-400 hover:bg-[#E2E8F0]";
-                }
+                let baseClass = "bg-[#F4F6F9] text-[#1B2A49]";
+                let borderClass = "border border-transparent";
 
-                if (isAlertePalefrenierCell) {
-                  baseClass = "bg-red-500 text-white font-bold z-10 shadow-md";
-                  borderClass = "border-2 border-red-700 ring-2 ring-red-300 print:border-red-500";
-                } else if (isToday) {
-                  baseClass = "bg-[#FFF8D6] text-[#8B5A2B] font-extrabold z-10 shadow-md scale-[1.05] transition-transform print:scale-100";
-                  borderClass = "ring-2 ring-[#8DC63F] ring-inset print:border print:border-[#8DC63F]"; 
-                }
-
-                if (evtsDuJour.length > 0 && !isAlertePalefrenierCell && !hasConge) {
-                  const firstEvt = evtsDuJour[0];
-                  if (firstEvt.type === 'vacances_ge') baseClass = isToday ? baseClass : "bg-blue-50 text-blue-800";
-                  if (firstEvt.type === 'jour_ferie') baseClass = isToday ? baseClass : "bg-purple-50 text-purple-800 font-bold";
-                }
-
-                const handleDayClick = () => {
-                  setSelectedDate(dateStr);
-                  setModalChoiceOpen(dateStr);
-                };
+                if (isAlertePalefrenierCell) baseClass = "bg-red-500 text-white font-bold z-10 shadow-md";
+                else if (isToday) { baseClass = "bg-[#FFF8D6] text-[#8B5A2B] font-extrabold z-10 scale-[1.02]"; borderClass = "border-2 border-[#8DC63F]"; }
 
                 return (
-                  <div key={jIndex} onClick={handleDayClick} title={evtsDuJour.map(e=>e.titre).join(', ') || (noteDuJour ? noteDuJour : '')}
-                    className={`h-8 print:h-6 rounded flex items-center justify-center text-xs relative cursor-pointer overflow-hidden print:border print:border-gray-200 ${baseClass} ${borderClass}`}
+                  <div key={jIndex} onClick={() => { setSelectedDate(dateStr); setModalChoiceOpen(dateStr); }}
+                    className={`h-8 print:h-7 rounded flex items-center justify-center text-[11px] relative cursor-pointer overflow-hidden transition-all hover:bg-white ${baseClass} ${borderClass} print:border-gray-200`}
                   >
                     {hasConge && !isAlertePalefrenierCell && (
-                      <div className="absolute inset-0 flex flex-col opacity-95 z-0 print:opacity-100">
-                        <div className={`h-1/2 w-full ${congesDuJour.some(c => (c.periode === 'jour' || c.periode === 'matin') && c.statut === 'valide') ? 'bg-[#3A5A22] print:bg-gray-400 print:border-b print:border-gray-500' : congesDuJour.some(c => (c.periode === 'jour' || c.periode === 'matin') && c.statut === 'provisoire') ? 'bg-[#D0D7E1]' : ''}`}></div>
-                        <div className={`h-1/2 w-full ${congesDuJour.some(c => (c.periode === 'jour' || c.periode === 'apres-midi') && c.statut === 'valide') ? 'bg-[#3A5A22] print:bg-gray-400 print:border-t print:border-gray-500' : congesDuJour.some(c => (c.periode === 'jour' || c.periode === 'apres-midi') && c.statut === 'provisoire') ? 'bg-[#D0D7E1]' : ''}`}></div>
+                      <div className="absolute inset-0 flex flex-col opacity-90">
+                        {/* Logic visuelle pour Congé vs Déplacement */}
+                        {[0, 1].map(half => {
+                           const active = congesDuJour.filter(c => (half === 0 ? (c.periode === 'jour' || c.periode === 'matin') : (c.periode === 'jour' || c.periode === 'apres-midi')));
+                           if (active.length === 0) return <div key={half} className="h-1/2 w-full"></div>;
+                           const isDepl = active.some(c => c.category === 'deplacement');
+                           const isValid = active.some(c => c.statut === 'valide');
+                           return <div key={half} className={`h-1/2 w-full ${isDepl ? 'bg-cyan-600' : (isValid ? 'bg-[#3A5A22]' : 'bg-[#D0D7E1]')}`}></div>
+                        })}
                       </div>
                     )}
-                    {congesDuJour.some(c => c.statut === 'provisoire') && !isAlertePalefrenierCell && (
-                      <div className="absolute inset-0 border-[1.5px] border-dashed border-[#8A9BAE] rounded z-0 print:border-gray-400"></div>
-                    )}
-                    
                     {evtsDuJour.length > 0 && (
-                      <div className="absolute bottom-0 left-0 right-0 flex flex-col z-20 opacity-90 print:opacity-100">
-                        {evtsDuJour.map((e, idx) => (
-                          <div key={idx} className={`h-[3px] print:h-[2px] w-full ${getColorClassForEvent(e.type)} print:bg-black`}></div>
-                        ))}
+                      <div className="absolute bottom-0 left-0 right-0 flex flex-col opacity-90 print:opacity-100">
+                        {evtsDuJour.map((e, idx) => <div key={idx} className={`h-[2px] w-full ${getColorClassForEvent(e.type)}`}></div>)}
                       </div>
                     )}
-
-                    <span className={`z-10 drop-shadow-sm ${congesDuJour.some(c => c.statut === 'valide') || isAlertePalefrenierCell ? 'text-white font-bold print:text-black' : ''}`}>{jour.getDate()}</span>
-                    
-                    {!isAlertePalefrenierCell && !hasConge && evtsDuJour.some(e => e.type === 'concours_oui') && <Award size={10} className="absolute -top-0.5 -right-0.5 text-[#8B5A2B] z-10 print:hidden" />}
-                    {!isAlertePalefrenierCell && !hasConge && evtsDuJour.some(e => e.type === 'concours_non') && <Tent size={10} className="absolute -top-0.5 -right-0.5 text-gray-500 z-10 print:hidden" />}
-
-                    {noteDuJour && !isAlertePalefrenierCell && (
-                      <StickyNote size={10} className={`absolute top-0.5 left-0.5 opacity-80 print:hidden ${congesDuJour.some(c => c.statut === 'valide') ? 'text-yellow-300' : 'text-yellow-600'}`} />
-                    )}
+                    <span className="z-10 drop-shadow-sm">{jour.getDate()}</span>
                   </div>
                 );
               })}
@@ -313,414 +217,158 @@ export default function App() {
         </div>
       );
     });
-  }, [anneeActuelle, evenements, congesParDate, palefrenierIds, todayStr, notes, filtreEmploye]); 
+  }, [anneeActuelle, evenements, congesParDate, filtreEmploye, todayStr]);
 
-  // --- ÉCRAN DE CHARGEMENT ---
-  if (!isLoaded) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-[#F0F4F8] flex-col gap-4">
-        <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-lg border-4 border-[#8DC63F] animate-pulse">
-          <span className="text-3xl">🐴</span>
-        </div>
-        <h2 className="text-2xl font-bold text-[#1B2A49]">Chargement...</h2>
-      </div>
-    );
-  }
-
-  // --- RENDU PRINCIPAL ---
   return (
     <>
       <style dangerouslySetInnerHTML={{__html: `
         @media print {
-          @page { size: landscape; margin: 1cm; }
-          body, * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-          ::-webkit-scrollbar { display: none; }
+          @page { size: landscape; margin: 0.5cm; }
+          body { background: white !important; height: auto !important; overflow: visible !important; }
+          .print\\:hidden { display: none !important; }
+          main { height: auto !important; overflow: visible !important; display: block !important; }
+          .grid { display: grid !important; grid-template-columns: repeat(4, 1fr) !important; gap: 10px !important; }
+          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        }
+        @media (max-width: 768px) {
+           .mobile-stack { flex-direction: column !important; overflow-y: auto !important; }
+           .mobile-sidebar { width: 100% !important; height: auto !important; border-right: none !important; border-bottom: 2px solid #8DC63F; }
+           .mobile-grid { grid-template-columns: 1fr !important; }
         }
       `}} />
 
-      <div className="flex h-screen print:h-auto bg-[#F0F4F8] font-sans overflow-hidden print:overflow-visible text-[#1B2A49] relative">
+      <div className="flex h-screen mobile-stack bg-[#F0F4F8] font-sans overflow-hidden print:bg-white print:h-auto print:overflow-visible">
         
         {/* SIDEBAR */}
-        <aside className="w-80 bg-[#1B2A49] shadow-2xl flex flex-col z-20 border-r border-[#141D36] relative print:hidden">
-          <div className="p-6 bg-[#141D36] text-white flex flex-col items-center justify-center border-b-[4px] border-[#8DC63F]">
-            <div className="w-28 h-28 bg-white rounded-full flex items-center justify-center mb-4 shadow-lg overflow-hidden border-[3px] border-[#8DC63F]">
-              <img src="/logo.png" alt="Logo PCP" className="w-full h-full object-contain p-2" />
-            </div>
-            <h2 className="text-[11px] font-extrabold uppercase tracking-widest text-[#1B2A49] bg-[#8DC63F] px-3 py-1.5 rounded-lg mb-2 text-center shadow-md w-full">
-              Organisation des équipes
-            </h2>
-            <h1 className="text-xl font-bold tracking-widest text-center leading-tight text-white/90 uppercase">
-              Poney Club<br/>de Presinge
-            </h1>
+        <aside className="w-80 mobile-sidebar bg-[#1B2A49] shadow-2xl flex flex-col z-20 print:hidden shrink-0">
+          <div className="p-4 bg-[#141D36] text-white flex flex-col items-center border-b-[4px] border-[#8DC63F]">
+            <img src="/logo.png" alt="Logo" className="w-20 h-20 mb-2 object-contain bg-white rounded-full p-1" />
+            <h1 className="text-sm font-bold text-center uppercase tracking-tighter text-[#8DC63F]">Organisation Écurie</h1>
+            <p className="text-xs opacity-70">Poney Club de Presinge</p>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 text-white/90">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xs font-bold text-[#8DC63F] uppercase flex items-center gap-2"><Users size={16} /> Équipe & Soldes</h3>
-              <button onClick={() => setModalStaffOpen(true)} className="text-[#8DC63F] hover:bg-white/20 p-1.5 rounded-md transition-colors" title="Gérer l'équipe"><Settings size={16} /></button>
-            </div>
-            
-            <p className="text-[10px] text-[#8A9BAE] italic mb-4 leading-tight">Cliquez sur un nom pour filtrer le calendrier.</p>
-
-            <div className="space-y-4">
-              {rolesDisponibles.map(role => {
-                const membresRole = equipeCalculee.filter(m => m.role === role);
-                if (membresRole.length === 0) return null;
-                
-                return (
-                  <div key={role} className="mb-4">
-                    <h4 className="text-[10px] font-bold text-white/50 uppercase border-b border-white/10 mb-2 pb-1 tracking-wider">{role}s</h4>
-                    {membresRole.map(membre => {
-                      const isSelected = filtreEmploye === membre.id;
-                      return (
-                        <div key={membre.id} onClick={() => setFiltreEmploye(isSelected ? null : membre.id)}
-                          className={`p-2 rounded-lg mb-2 shadow-sm border flex justify-between items-center cursor-pointer transition-all ${isSelected ? 'bg-[#8DC63F] text-[#1B2A49] border-[#8DC63F] scale-[1.02] font-bold' : 'bg-[#213459] border-transparent hover:bg-[#2A406D]'}`}
-                        >
-                          <span className="font-semibold text-sm leading-tight flex flex-col">
-                            {membre.nom}
-                            {membre.repos && <span className={`text-[10px] font-normal mt-0.5 ${isSelected ? 'text-[#1B2A49]/70' : 'text-[#8A9BAE]'}`}>Repos : {membre.repos}</span>}
-                          </span>
-                          {membre.total > 0 ? (
-                            <span className={`text-xs px-2 py-1 rounded-full font-bold ${membre.pris >= membre.total ? 'bg-red-500 text-white' : (isSelected ? 'bg-[#1B2A49]/10 text-[#1B2A49]' : 'bg-[#141D36] text-[#8DC63F]')}`}>
-                              {membre.pris} / {membre.total}
-                            </span>
-                          ) : (
-                            <span className="text-xs px-2 py-1 bg-[#141D36] text-gray-400 rounded-full">{membre.pris} j.</span>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })}
-            </div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {rolesDisponibles.map(role => {
+              const membres = equipeCalculee.filter(m => m.role === role);
+              if (membres.length === 0) return null;
+              return (
+                <div key={role}>
+                  <h4 className="text-[10px] font-bold text-white/40 uppercase mb-2 tracking-widest">{role}s</h4>
+                  {membres.map(m => (
+                    <div key={m.id} onClick={() => setFiltreEmploye(filtreEmploye === m.id ? null : m.id)}
+                      className={`p-2 rounded-lg mb-1 border cursor-pointer transition-all flex justify-between items-center ${filtreEmploye === m.id ? 'bg-[#8DC63F] text-[#1B2A49]' : 'bg-[#213459] border-transparent text-white/90'}`}>
+                      <div className="flex flex-col">
+                         <span className="text-sm font-bold">{m.nom}</span>
+                         {m.repos && <span className="text-[9px] opacity-60">Off: {m.repos}</span>}
+                      </div>
+                      {m.total > 0 && <span className="text-[10px] font-mono">{m.pris}/{m.total}</span>}
+                    </div>
+                  ))}
+                </div>
+              )
+            })}
           </div>
 
-          <div className="p-4 bg-[#141D36] space-y-2 shrink-0">
-            <button onClick={() => ouvrirModalConge()} className="w-full bg-[#8DC63F] hover:bg-[#7AB034] text-[#1B2A49] font-extrabold py-3 px-4 rounded-xl shadow-md transition-colors flex items-center justify-center gap-2">
-              <Plus size={18} /> Saisir un congé
-            </button>
-            <button onClick={() => ouvrirModalEvt()} className="w-full bg-[#213459] hover:bg-[#2A406D] text-white border border-[#8DC63F]/30 font-bold py-2 px-4 rounded-xl shadow-sm transition-colors flex items-center justify-center gap-2 text-sm">
-              <Flag size={16} /> Ajouter un événement
-            </button>
+          <div className="p-4 bg-[#141D36] space-y-2">
+             <button onClick={() => ouvrirModalConge()} className="w-full bg-[#8DC63F] text-[#1B2A49] font-bold py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg"><Plus size={18}/> Saisir Absence</button>
+             <button onClick={() => setModalStaffOpen(true)} className="w-full bg-white/10 text-white py-2 rounded-xl flex items-center justify-center gap-2 border border-white/20"><Settings size={16}/> Config. Équipe</button>
           </div>
         </aside>
 
-        {/* ZONE CENTRALE */}
-        <main className="flex-1 flex flex-col h-full print:h-auto overflow-hidden print:overflow-visible relative bg-[#F0F4F8] print:bg-white">
-          
-          {/* FILIGRANE */}
-          <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-0 opacity-[0.04] overflow-hidden print:opacity-[0.02]">
-            <img src="/logo.png" alt="Filigrane" className="w-[60vw] h-[60vw] max-w-[800px] max-h-[800px] object-contain grayscale" />
-          </div>
-
-          <header className="min-h-24 bg-white/70 backdrop-blur-md border-b border-[#D0D7E1] flex items-center justify-between px-8 py-3 shadow-sm shrink-0 relative z-10 print:hidden">
-            <div className="flex items-center gap-6 shrink-0">
-              <div className="flex items-center gap-2 bg-white rounded-lg shadow-sm border border-[#D0D7E1] p-1">
-                <button onClick={() => setAnneeActuelle(a => a - 1)} className="p-1 hover:bg-[#F0F4F8] rounded text-[#6B7A99]"><ChevronLeft size={20}/></button>
-                <h2 className="text-xl font-bold text-[#1B2A49] w-16 text-center">{anneeActuelle}</h2>
-                <button onClick={() => setAnneeActuelle(a => a + 1)} className="p-1 hover:bg-[#F0F4F8] rounded text-[#6B7A99]"><ChevronRight size={20}/></button>
-              </div>
-              <div className="hidden md:block">
-                <p className="text-sm font-bold text-[#1B2A49]">Planning Annuel</p>
-                <p className="text-xs text-[#6B7A99] flex items-center gap-1"><MapPin size={12} /> Genève</p>
-              </div>
+        {/* MAIN CONTENT */}
+        <main className="flex-1 flex flex-col relative print:p-0">
+          <header className="h-20 bg-white/80 backdrop-blur-md border-b border-[#D0D7E1] flex items-center justify-between px-4 shrink-0 print:hidden">
+            <div className="flex items-center gap-2">
+               <button onClick={() => setAnneeActuelle(a => a-1)} className="p-2 bg-gray-100 rounded-lg"><ChevronLeft size={20}/></button>
+               <h2 className="text-xl font-black">{anneeActuelle}</h2>
+               <button onClick={() => setAnneeActuelle(a => a+1)} className="p-2 bg-gray-100 rounded-lg"><ChevronRight size={20}/></button>
             </div>
-
-            <div className={`flex-1 mx-4 py-2 px-4 rounded-lg border flex flex-col justify-center items-center text-center transition-colors shadow-sm ${isAlertePalefrenierHeader ? 'bg-red-500 border-red-700 text-white' : 'bg-white border-[#D0D7E1] text-[#1B2A49]'}`}>
-              <span className={`text-xs font-bold mb-1 uppercase tracking-wide opacity-90 ${isAlertePalefrenierHeader ? 'text-white' : ''}`}>
-                {selectedDate === todayStr ? "Aujourd'hui" : `Sélection : ${new Date(selectedDate).toLocaleDateString('fr-CH')}`}
-              </span>
-
-              {evtsSelectionnes.length > 0 && (
-                <div className="flex flex-wrap gap-3 justify-center mb-1">
-                  {evtsSelectionnes.map(e => (
-                    <span key={e.id} className={`text-sm font-bold flex items-center gap-1.5 ${isAlertePalefrenierHeader ? 'text-white' : (e.type === 'vacances_ge' ? 'text-blue-600' : e.type === 'jour_ferie' ? 'text-purple-600' : 'text-[#8B5A2B]')}`}>
-                      {e.type === 'vacances_ge' ? '🏖️ ' : e.type === 'jour_ferie' ? '🎉 ' : '🚩 '}{e.titre}
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              {absentsDuJourSelectionne.length === 0 ? (
-                <span className={`text-sm opacity-90 ${isAlertePalefrenierHeader ? 'text-white' : ''}`}>Effectif complet, aucun absent</span>
-              ) : (
-                <div className="text-sm font-semibold flex flex-wrap items-center justify-center gap-2">
-                  {isAlertePalefrenierHeader && <AlertCircle size={16} />} 
-                  <span>Absents ({absentsDuJourSelectionne.length}) :</span>
-                  {absentsDuJourSelectionne.map(c => {
-                    const membre = membresBase.find(u => u.id === c.userId);
-                    if (!membre) return null;
-                    return (
-                      <button key={c.id} onClick={() => ouvrirModalConge(selectedDate, c)}
-                        className={`px-2 py-0.5 rounded shadow-sm border transition-colors text-xs flex items-center gap-1 cursor-pointer hover:scale-105 ${isAlertePalefrenierHeader ? 'bg-red-600 border-red-400 hover:bg-red-700 text-white' : 'bg-[#F4F6F9] border-[#D0D7E1] hover:bg-[#E2E8F0]'}`}
-                        title="Cliquez pour modifier ou supprimer"
-                      >
-                        {membre.nom} ({c.periode === 'jour' ? '1j' : '0.5j'}) <Edit size={10} />
-                      </button>
-                    );
+            
+            <div className={`flex-1 mx-4 p-2 rounded-xl border text-center transition-all ${isAlertePalefrenierHeader ? 'bg-red-500 text-white' : 'bg-white border-[#D0D7E1]'}`}>
+               <p className="text-[10px] font-bold uppercase opacity-60">{new Date(selectedDate).toLocaleDateString('fr-CH', {day:'numeric', month:'long'})}</p>
+               <div className="flex flex-wrap justify-center gap-2 text-xs font-bold">
+                  {absentsDuJourSelectionne.length === 0 ? "Effectif complet" : absentsDuJourSelectionne.map(c => {
+                    const m = membresBase.find(u => u.id === c.userId);
+                    return <span key={c.id} className="bg-black/10 px-2 py-0.5 rounded flex items-center gap-1">{m?.nom} {c.category === 'deplacement' ? '✈️' : ''}</span>
                   })}
-                </div>
-              )}
-
-              <div className="mt-1">
-                {notes[selectedDate] ? (
-                  <div onClick={() => { setNoteText(notes[selectedDate]); setModalNoteOpen(true); }}
-                       className={`px-3 py-1 text-xs rounded-md shadow-sm cursor-pointer transition-colors flex items-center justify-center gap-1.5 ${isAlertePalefrenierHeader ? 'bg-red-800 text-white hover:bg-red-900 border border-red-900' : 'bg-yellow-100 border border-yellow-300 text-yellow-800 hover:bg-yellow-200'}`}
-                       title="Modifier la note">
-                    <StickyNote size={12} /> {notes[selectedDate]}
-                  </div>
-                ) : (
-                  <button onClick={() => { setNoteText(''); setModalNoteOpen(true); }} className={`text-[10px] opacity-60 hover:opacity-100 transition-opacity flex items-center justify-center gap-1 ${isAlertePalefrenierHeader ? 'text-white' : 'text-[#6B7A99]'}`}>
-                    <Plus size={10}/> Ajouter une note au jour
-                  </button>
-                )}
-              </div>
+               </div>
             </div>
 
-            <div className="text-right shrink-0 flex items-center gap-4">
-              <button onClick={() => window.print()} className="p-2.5 bg-white hover:bg-[#F4F6F9] border border-[#D0D7E1] rounded-lg text-[#1B2A49] shadow-sm transition-colors flex items-center gap-2" title="Imprimer le calendrier">
-                <Printer size={18} /> <span className="text-xs font-bold hidden xl:block">Imprimer</span>
-              </button>
-            </div>
+            <button onClick={() => window.print()} className="p-3 bg-white border rounded-full shadow-sm text-[#1B2A49]"><Printer size={20}/></button>
           </header>
 
           {/* LÉGENDE */}
-          <div className="bg-white/80 backdrop-blur-md px-8 py-3 flex gap-6 border-b border-[#D0D7E1] text-xs font-semibold shrink-0 flex-wrap shadow-sm relative z-10 print:hidden text-[#1B2A49]">
-            <div className="flex items-center gap-2"><div className="w-4 h-4 bg-[#3A5A22] rounded-sm"></div> Congé Validé</div>
-            <div className="flex items-center gap-2"><div className="w-4 h-4 bg-[#E0E5EC] border-2 border-dashed border-[#A3B1C6] rounded-sm"></div> Congé Provisoire</div>
-            <div className="flex items-center gap-2"><div className="w-4 h-1.5 bg-[#8B5A2B] rounded-sm"></div> Concours Club</div>
-            <div className="flex items-center gap-2"><div className="w-4 h-1.5 bg-blue-500 rounded-sm"></div> Vacances GE</div>
-            <div className="flex items-center gap-2"><div className="w-4 h-1.5 bg-purple-500 rounded-sm"></div> Jour Férié</div>
+          <div className="bg-white px-4 py-2 border-b flex flex-wrap gap-4 text-[10px] font-bold print:hidden">
+             <div className="flex items-center gap-1"><div className="w-3 h-3 bg-[#3A5A22] rounded-sm"></div> Congé Validé</div>
+             <div className="flex items-center gap-1"><div className="w-3 h-3 bg-cyan-600 rounded-sm"></div> Déplacement (Hors Solde)</div>
+             <div className="flex items-center gap-1"><div className="w-3 h-3 bg-[#D0D7E1] rounded-sm"></div> Provisoire</div>
           </div>
 
-          {/* TITRE EXCLUSIF IMPRESSION */}
-          <div className="hidden print:block text-center pt-8 pb-4">
-            <h1 className="text-3xl font-bold text-[#1B2A49]">Planning Écurie - {anneeActuelle}</h1>
-            {filtreEmploye && <h2 className="text-xl font-bold text-gray-600 mt-2">Filtre actif : {membresBase.find(m => m.id === filtreEmploye)?.nom}</h2>}
-          </div>
-
-          <div className="flex-1 overflow-y-auto print:overflow-visible p-8 relative z-10 print:p-0">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 print:grid-cols-4 print:gap-4 print:text-xs">
-              {calendrierMemoise}
-            </div>
+          <div className="flex-1 overflow-y-auto p-4 mobile-grid grid grid-cols-4 gap-4 print:grid-cols-4 print:gap-2">
+            {calendrierMemoise}
           </div>
         </main>
 
-        {/* --- MENU CHOIX AU CLIC SUR UN JOUR --- */}
-        {modalChoiceOpen && (
-          <div className="fixed inset-0 bg-[#1B2A49]/80 backdrop-blur-sm flex items-center justify-center z-50 print:hidden">
-            <div className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-sm text-center space-y-4 border-2 border-[#8DC63F]">
-              <h3 className="font-bold text-lg text-[#1B2A49] border-b pb-2 mb-4">
-                {new Date(modalChoiceOpen).toLocaleDateString('fr-CH', { weekday: 'long', day: 'numeric', month: 'long' })}
-              </h3>
-              
-              <button onClick={() => { ouvrirModalConge(modalChoiceOpen, null); setModalChoiceOpen(null); }} className="w-full py-3 bg-[#8DC63F] hover:bg-[#7AB034] text-[#1B2A49] rounded-xl font-bold flex items-center justify-center gap-2 shadow-sm transition-transform hover:scale-105">
-                <Plus size={18}/> Ajouter une Absence
-              </button>
-              
-              <button onClick={() => { ouvrirModalEvt(modalChoiceOpen); setModalChoiceOpen(null); }} className="w-full py-3 bg-[#1B2A49] hover:bg-[#141D36] text-white border border-[#8DC63F] rounded-xl font-bold flex items-center justify-center gap-2 shadow-sm transition-transform hover:scale-105">
-                <Flag size={18}/> Ajouter un Événement
-              </button>
-
-              {evenements[modalChoiceOpen] && evenements[modalChoiceOpen].length > 0 && (
-                <div className="mt-4 border-t pt-4">
-                  <p className="text-xs text-[#6B7A99] mb-2 uppercase font-bold tracking-wide">Supprimer un événement</p>
-                  {evenements[modalChoiceOpen].map(e => (
-                    <button key={e.id} onClick={() => { supprimerEvenement(modalChoiceOpen, e.id); setModalChoiceOpen(null); }} className="w-full py-2 mb-2 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg text-sm font-bold flex items-center justify-center gap-2 border border-red-200 transition-colors">
-                      <Trash2 size={16}/> {e.titre}
-                    </button>
-                  ))}
-                </div>
-              )}
-              
-              <button onClick={() => setModalChoiceOpen(null)} className="w-full py-3 text-[#6B7A99] hover:bg-[#F0F4F8] rounded-xl font-bold mt-2 transition-colors">
-                Annuler
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* --- NOUVEAU MODAL : AJOUT/MODIF D'UNE NOTE --- */}
-        {modalNoteOpen && (
-          <div className="fixed inset-0 bg-[#1B2A49]/80 backdrop-blur-sm flex items-center justify-center z-50 print:hidden">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
-              <div className="bg-yellow-400 px-6 py-3 flex justify-between items-center text-yellow-900 border-b border-yellow-500">
-                <h3 className="text-md font-bold flex items-center gap-2"><StickyNote size={18} /> Note du {new Date(selectedDate).toLocaleDateString('fr-CH')}</h3>
-                <button onClick={() => setModalNoteOpen(false)} className="hover:bg-yellow-500 p-1 rounded-full transition-colors"><X size={20} /></button>
-              </div>
-              <form onSubmit={sauvegarderNote} className="p-6 space-y-4">
-                <div>
-                  <label className="block text-sm font-bold text-[#1B2A49] mb-2">Votre note (Post-it)</label>
-                  <input 
-                    type="text" 
-                    autoFocus
-                    className="w-full border border-gray-300 rounded-lg p-3 bg-yellow-50 outline-none focus:ring-2 focus:ring-yellow-400" 
-                    value={noteText} 
-                    onChange={(e) => setNoteText(e.target.value)} 
-                    placeholder="Ex: Maréchal l'après-midi..." 
-                  />
-                  <p className="text-xs text-gray-500 mt-2">Laissez vide pour supprimer la note existante.</p>
-                </div>
-                <div className="flex gap-2 pt-2">
-                  <button type="button" onClick={() => setModalNoteOpen(false)} className="flex-1 py-2 text-gray-500 hover:bg-gray-100 rounded-lg font-bold">Annuler</button>
-                  <button type="submit" className="flex-1 py-2 bg-yellow-500 hover:bg-yellow-600 text-yellow-900 rounded-lg font-bold shadow-sm">Enregistrer</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* --- MODAL : AJOUT D'ÉVÉNEMENT (CONCOURS) --- */}
-        {modalEvtOpen && (
-          <div className="fixed inset-0 bg-[#1B2A49]/80 backdrop-blur-sm flex items-center justify-center z-50 print:hidden">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-              <div className="bg-[#1B2A49] px-6 py-4 flex justify-between items-center text-white border-b-4 border-[#8DC63F]">
-                <h3 className="text-lg font-bold flex items-center gap-2"><Flag size={20} className="text-[#8DC63F]" /> Nouvel Événement</h3>
-                <button onClick={() => setModalEvtOpen(false)} className="hover:bg-white/20 p-1 rounded-full"><X size={20} /></button>
-              </div>
-              <form onSubmit={sauvegarderEvenement} className="p-6 space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-bold text-[#1B2A49] mb-1">Du</label>
-                    <input type="date" className="w-full border border-[#D0D7E1] rounded-lg p-2 outline-none focus:ring-2 focus:ring-[#8DC63F]" value={evtForm.dateDebut} onChange={(e) => setEvtForm({...evtForm, dateDebut: e.target.value})} required />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-[#1B2A49] mb-1">Au (inclus)</label>
-                    <input type="date" className="w-full border border-[#D0D7E1] rounded-lg p-2 outline-none focus:ring-2 focus:ring-[#8DC63F]" value={evtForm.dateFin} onChange={(e) => setEvtForm({...evtForm, dateFin: e.target.value})} />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-[#1B2A49] mb-1">Titre</label>
-                  <input type="text" className="w-full border border-[#D0D7E1] rounded-lg p-2 outline-none focus:ring-2 focus:ring-[#8DC63F]" value={evtForm.titre} onChange={(e) => setEvtForm({...evtForm, titre: e.target.value})} required placeholder="Ex: CSO ou Férié..." />
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-[#1B2A49] mb-1">Type</label>
-                  <select className="w-full border border-[#D0D7E1] rounded-lg p-2.5 bg-[#F4F6F9] outline-none focus:ring-2 focus:ring-[#8DC63F]" value={evtForm.type} onChange={(e) => setEvtForm({...evtForm, type: e.target.value})}>
-                    <option value="concours_oui">Participation du Club (Marron)</option>
-                    <option value="concours_non">Sans participation (Gris)</option>
-                    <option value="vacances_ge">Vacances Scolaires GE (Bleu)</option>
-                    <option value="jour_ferie">Jour Férié (Violet)</option>
-                  </select>
-                </div>
-                <div className="flex gap-2 pt-4 mt-4 border-t border-[#D0D7E1]">
-                  <button type="button" onClick={() => setModalEvtOpen(false)} className="flex-1 py-2 text-gray-500 hover:bg-[#F4F6F9] rounded-lg font-bold">Annuler</button>
-                  <button type="submit" className="flex-1 py-2 bg-[#8DC63F] hover:bg-[#7AB034] text-[#1B2A49] rounded-lg font-bold shadow-sm">Ajouter</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* --- MODAL : GESTION DES CONGÉS --- */}
+        {/* MODAL ABSENCE (AJOUT TYPE DEPLACEMENT) */}
         {modalCongeOpen && (
-          <div className="fixed inset-0 bg-[#1B2A49]/80 backdrop-blur-sm flex items-center justify-center z-50 print:hidden">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-              <div className="bg-[#8DC63F] px-6 py-4 flex justify-between items-center text-[#1B2A49]">
-                <h3 className="text-lg font-bold flex items-center gap-2"><CalendarIcon size={20} />{formData.id ? "Modifier l'absence" : "Saisir une absence"}</h3>
-                <button onClick={() => setModalCongeOpen(false)} className="hover:bg-white/30 p-1 rounded-full"><X size={20} /></button>
-              </div>
-              <form onSubmit={sauvegarderConge} className="p-6 space-y-4">
-                <div>
-                  <label className="block text-sm font-bold text-[#1B2A49] mb-1">Employé</label>
-                  <select className="w-full border border-[#D0D7E1] rounded-lg p-2.5 bg-[#F4F6F9] outline-none focus:ring-2 focus:ring-[#8DC63F]" value={formData.userId} onChange={(e) => setFormData({...formData, userId: e.target.value})} required>
-                    {equipeCalculee.map(m => <option key={m.id} value={m.id}>{m.nom} ({m.role})</option>)}
-                  </select>
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+             <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+                <div className="p-4 bg-[#1B2A49] text-white flex justify-between">
+                   <h3 className="font-bold flex items-center gap-2"><CalendarIcon size={18}/> Saisir une période</h3>
+                   <X className="cursor-pointer" onClick={() => setModalCongeOpen(false)}/>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div><label className="block text-sm font-bold text-[#1B2A49] mb-1">Du</label><input type="date" className="w-full border border-[#D0D7E1] rounded-lg p-2 outline-none focus:ring-2 focus:ring-[#8DC63F]" value={formData.dateDebut} onChange={(e) => setFormData({...formData, dateDebut: e.target.value})} required /></div>
-                  <div><label className="block text-sm font-bold text-[#1B2A49] mb-1">Au (inclus)</label><input type="date" className="w-full border border-[#D0D7E1] rounded-lg p-2 outline-none focus:ring-2 focus:ring-[#8DC63F]" value={formData.dateFin} onChange={(e) => setFormData({...formData, dateFin: e.target.value})} /></div>
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-[#1B2A49] mb-1">Période</label>
-                  <select className="w-full border border-[#D0D7E1] rounded-lg p-2.5 bg-[#F4F6F9] outline-none focus:ring-2 focus:ring-[#8DC63F]" value={formData.periode} onChange={(e) => setFormData({...formData, periode: e.target.value})} disabled={formData.dateDebut !== formData.dateFin && formData.dateFin !== ''}>
-                    <option value="jour">Journée entière (1 j.)</option>
-                    <option value="matin">Matin uniquement (0.5 j.)</option>
-                    <option value="apres-midi">Après-midi uniquement (0.5 j.)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-[#1B2A49] mb-1">Statut</label>
-                  <div className="flex gap-4">
-                    <label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="statut" value="provisoire" checked={formData.statut === 'provisoire'} onChange={(e) => setFormData({...formData, statut: e.target.value})} className="text-gray-500 focus:ring-gray-400 w-4 h-4" /><span className="text-gray-600 font-bold">Provisoire</span></label>
-                    <label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="statut" value="valide" checked={formData.statut === 'valide'} onChange={(e) => setFormData({...formData, statut: e.target.value})} className="text-[#3A5A22] focus:ring-[#3A5A22] w-4 h-4" /><span className="text-[#3A5A22] font-bold">Validé</span></label>
-                  </div>
-                </div>
-                <div className="flex justify-between items-center pt-4 border-t border-[#D0D7E1] mt-6">
-                  {formData.id ? <button type="button" onClick={supprimerConge} className="text-red-500 hover:bg-red-50 p-2 rounded-lg flex items-center gap-1 text-sm font-bold transition-colors"><Trash2 size={16} /> Supprimer</button> : <div></div>}
-                  <div className="flex gap-2">
-                    <button type="button" onClick={() => setModalCongeOpen(false)} className="px-4 py-2 text-gray-500 hover:bg-[#F4F6F9] rounded-lg font-bold">Annuler</button>
-                    <button type="submit" className="px-4 py-2 bg-[#1B2A49] hover:bg-[#141D36] text-white rounded-lg font-bold shadow-sm">Enregistrer</button>
-                  </div>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* --- MODAL : GESTION DE L'ÉQUIPE (ADMIN) --- */}
-        {modalStaffOpen && (
-          <div className="fixed inset-0 bg-[#1B2A49]/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 print:hidden">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
-              <div className="bg-[#1B2A49] px-6 py-4 flex justify-between items-center text-white shrink-0 border-b-4 border-[#8DC63F]">
-                <h3 className="text-lg font-bold flex items-center gap-2"><Settings size={20} className="text-[#8DC63F]"/> Paramètres de l'équipe</h3>
-                <button onClick={() => setModalStaffOpen(false)} className="hover:bg-white/20 p-1 rounded-full"><X size={20} /></button>
-              </div>
-              
-              <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
-                <div className="p-6 md:w-1/2 bg-[#F4F6F9] border-r border-[#D0D7E1] overflow-y-auto">
-                  <h4 className="font-bold text-[#1B2A49] mb-4 border-b border-[#D0D7E1] pb-2">{staffForm.id ? 'Modifier le membre' : 'Ajouter un nouveau membre'}</h4>
-                  <form onSubmit={sauvegarderStaff} className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-bold text-[#1B2A49] mb-1">Prénom / Nom</label>
-                      <input type="text" className="w-full border border-[#D0D7E1] rounded-lg p-2 outline-none focus:ring-2 focus:ring-[#8DC63F]" value={staffForm.nom} onChange={e => setStaffForm({...staffForm, nom: e.target.value})} required placeholder="Ex: Jean" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-bold text-[#1B2A49] mb-1">Rôle</label>
-                      <select className="w-full border border-[#D0D7E1] rounded-lg p-2 outline-none focus:ring-2 focus:ring-[#8DC63F]" value={staffForm.role} onChange={e => setStaffForm({...staffForm, role: e.target.value})}>
-                        {rolesDisponibles.map(r => <option key={r} value={r}>{r}</option>)}
+                <form onSubmit={sauvegarderConge} className="p-6 space-y-4">
+                   <div>
+                      <label className="block text-xs font-bold uppercase text-gray-400 mb-1">Nature de l'absence</label>
+                      <select className="w-full border p-3 rounded-xl bg-gray-50 font-bold" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}>
+                         <option value="conge">🏝️ Congé (décompté du solde)</option>
+                         <option value="deplacement">✈️ Déplacement Extérieur (travail hors site)</option>
                       </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-bold text-[#1B2A49] mb-1">Jours de vacances par an</label>
-                      <input type="number" min="0" step="0.5" className="w-full border border-[#D0D7E1] rounded-lg p-2 outline-none focus:ring-2 focus:ring-[#8DC63F]" value={staffForm.total} onChange={e => setStaffForm({...staffForm, total: e.target.value})} />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-bold text-[#1B2A49] mb-1">Jours de repos fixes</label>
-                      <input type="text" className="w-full border border-[#D0D7E1] rounded-lg p-2 outline-none focus:ring-2 focus:ring-[#8DC63F]" value={staffForm.repos} onChange={e => setStaffForm({...staffForm, repos: e.target.value})} placeholder="Ex: Lundi, Mardi" />
-                    </div>
-
-                    <div className="flex gap-2 pt-2">
-                      {staffForm.id && <button type="button" onClick={() => setStaffForm({id: null, nom:'', role:'Palefrenier', total:25, repos: ''})} className="w-1/3 py-2 text-gray-500 bg-white border border-[#D0D7E1] rounded-lg font-bold">Annuler</button>}
-                      <button type="submit" className="flex-1 py-2 bg-[#8DC63F] hover:bg-[#7AB034] text-[#1B2A49] rounded-lg font-bold shadow-sm">
-                        {staffForm.id ? 'Mettre à jour' : '+ Ajouter à l\'équipe'}
-                      </button>
-                    </div>
-                  </form>
-                </div>
-
-                <div className="p-6 md:w-1/2 overflow-y-auto bg-white">
-                  <h4 className="font-bold text-[#1B2A49] mb-4 border-b border-[#D0D7E1] pb-2">Membres actuels</h4>
-                  <div className="space-y-2">
-                    {membresBase.map(membre => (
-                      <div key={membre.id} className="flex justify-between items-center p-2 border border-[#D0D7E1] rounded-lg hover:bg-[#F4F6F9] transition-colors">
-                        <div>
-                          <p className="font-bold text-sm text-[#1B2A49]">{membre.nom}</p>
-                          <p className="text-xs text-[#6B7A99]">{membre.role} • {membre.total > 0 ? `${membre.total}j/an` : 'Sans quota'} {membre.repos ? `• Repos: ${membre.repos}` : ''}</p>
-                        </div>
-                        <div className="flex gap-1">
-                          <button onClick={() => editerStaff(membre)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"><Edit size={16} /></button>
-                          <button onClick={() => supprimerStaff(membre.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded"><Trash2 size={16} /></button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
+                   </div>
+                   <div className="grid grid-cols-2 gap-2">
+                      <input type="date" className="border p-3 rounded-xl" value={formData.dateDebut} onChange={e => setFormData({...formData, dateDebut: e.target.value})} required/>
+                      <input type="date" className="border p-3 rounded-xl" value={formData.dateFin} onChange={e => setFormData({...formData, dateFin: e.target.value})}/>
+                   </div>
+                   <div>
+                      <label className="block text-xs font-bold uppercase text-gray-400 mb-1">Collaborateur</label>
+                      <select className="w-full border p-3 rounded-xl" value={formData.userId} onChange={e => setFormData({...formData, userId: e.target.value})} required>
+                         {membresBase.map(m => <option key={m.id} value={m.id}>{m.nom}</option>)}
+                      </select>
+                   </div>
+                   <div className="flex gap-4">
+                      <label className="flex items-center gap-2"><input type="radio" checked={formData.statut === 'provisoire'} onChange={() => setFormData({...formData, statut:'provisoire'})}/> Provisoire</label>
+                      <label className="flex items-center gap-2 text-green-700 font-bold"><input type="radio" checked={formData.statut === 'valide'} onChange={() => setFormData({...formData, statut:'valide'})}/> Validé</label>
+                   </div>
+                   <div className="flex gap-2 pt-4">
+                      {formData.id && <button type="button" onClick={supprimerConge} className="p-3 text-red-500"><Trash2/></button>}
+                      <button type="submit" className="flex-1 bg-[#1B2A49] text-white py-3 rounded-xl font-bold">Enregistrer</button>
+                   </div>
+                </form>
+             </div>
           </div>
         )}
+
+        {/* MODAL CHOIX (Amélioration ergonomie mobile) */}
+        {modalChoiceOpen && (
+          <div className="fixed inset-0 bg-black/60 flex items-end md:items-center justify-center z-50 p-4">
+             <div className="bg-white rounded-t-3xl md:rounded-3xl w-full max-w-sm p-6 space-y-3">
+                <h4 className="text-center font-black border-b pb-2">{new Date(modalChoiceOpen).toLocaleDateString('fr-CH', {weekday:'long', day:'numeric', month:'long'})}</h4>
+                <button onClick={() => { ouvrirModalConge(modalChoiceOpen); setModalChoiceOpen(null); }} className="w-full py-4 bg-[#8DC63F] text-[#1B2A49] font-bold rounded-2xl flex items-center justify-center gap-2"><Plus/> Absence / Déplacement</button>
+                <button onClick={() => { ouvrirModalEvt(modalChoiceOpen); setModalChoiceOpen(null); }} className="w-full py-4 bg-[#1B2A49] text-white font-bold rounded-2xl flex items-center justify-center gap-2"><Flag/> Événement Club</button>
+                <button onClick={() => setModalChoiceOpen(null)} className="w-full py-3 text-gray-400 font-bold uppercase text-xs">Annuler</button>
+             </div>
+          </div>
+        )}
+
       </div>
     </>
   );
+}
+
+function getColorClassForEvent(type) {
+  if (type === 'concours_oui') return "bg-[#8B5A2B]";
+  if (type === 'concours_non') return "bg-gray-400";
+  if (type === 'vacances_ge') return "bg-blue-500";
+  if (type === 'jour_ferie') return "bg-purple-500";
+  return "bg-black";
 }
