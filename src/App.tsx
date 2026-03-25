@@ -12,7 +12,7 @@ const supabaseUrl = 'https://lnwvlyswsmtafyoepovq.supabase.co';
 const supabaseKey = 'sb_publishable_azT_rAkqeE-zsnvolYSY9w_7MtlnBVI';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const PIN_DIRECTION = "1234";
+const PIN_DIRECTION = "poney";
 
 // --- DONNÉES PCP RÉELLES ---
 const equipePCP = [
