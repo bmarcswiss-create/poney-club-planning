@@ -12,7 +12,8 @@ const supabaseUrl = 'https://lnwvlyswsmtafyoepovq.supabase.co';
 const supabaseKey = 'sb_publishable_azT_rAkqeE-zsnvolYSY9w_7MtlnBVI';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const PIN_DIRECTION = "poney";
+// --- MOT DE PASSE DIRECTION ---
+const PIN_DIRECTION = "poney"; 
 
 // --- DONNÉES PCP RÉELLES ---
 const equipePCP = [
@@ -33,7 +34,6 @@ const equipePCP = [
 
 // --- CALENDRIER OFFICIEL GENÈVE (GE) 2026 ---
 const initialEvts = {
-  // Jours Fériés GE 2026
   '2026-01-01': [{ id: 'jf1', type: 'jour_ferie', titre: 'Nouvel An' }],
   '2026-04-03': [{ id: 'jf2', type: 'jour_ferie', titre: 'Vendredi Saint' }],
   '2026-04-06': [{ id: 'jf3', type: 'jour_ferie', titre: 'Lundi de Pâques' }],
@@ -43,22 +43,17 @@ const initialEvts = {
   '2026-09-10': [{ id: 'jf7', type: 'jour_ferie', titre: 'Jeûne Genevois' }],
   '2026-12-25': [{ id: 'jf8', type: 'jour_ferie', titre: 'Noël' }],
   '2026-12-31': [{ id: 'jf9', type: 'jour_ferie', titre: 'Restauration République' }],
-
-  // Vacances Scolaires GE 2026 (DIP)
   '2026-02-16': [{ id: 'v1', type: 'vacances_ge', titre: 'Relâches' }],
   '2026-02-17': [{ id: 'v2', type: 'vacances_ge', titre: 'Relâches' }],
   '2026-02-18': [{ id: 'v3', type: 'vacances_ge', titre: 'Relâches' }],
   '2026-02-19': [{ id: 'v4', type: 'vacances_ge', titre: 'Relâches' }],
   '2026-02-20': [{ id: 'v5', type: 'vacances_ge', titre: 'Relâches' }],
-  // Pâques
   '2026-04-07': [{ id: 'v6', type: 'vacances_ge', titre: 'Pâques' }],
   '2026-04-08': [{ id: 'v7', type: 'vacances_ge', titre: 'Pâques' }],
   '2026-04-09': [{ id: 'v8', type: 'vacances_ge', titre: 'Pâques' }],
   '2026-04-10': [{ id: 'v9', type: 'vacances_ge', titre: 'Pâques' }],
-  // Été (début 4 juillet - fin 23 août)
   '2026-07-06': [{ id: 'v10', type: 'vacances_ge', titre: 'Grandes Vacances' }],
   '2026-08-21': [{ id: 'v11', type: 'vacances_ge', titre: 'Grandes Vacances' }],
-  // Automne
   '2026-10-19': [{ id: 'v12', type: 'vacances_ge', titre: 'Automne' }],
   '2026-10-20': [{ id: 'v13', type: 'vacances_ge', titre: 'Automne' }],
   '2026-10-21': [{ id: 'v14', type: 'vacances_ge', titre: 'Automne' }],
@@ -72,7 +67,6 @@ const rolesDisponibles = ["Palefrenier", "Apprentie", "Stagiaire", "Monitrice", 
 export default function App() {
   const todayStr = new Date().toISOString().split('T')[0];
 
-  // --- ÉTATS ---
   const [isLoaded, setIsLoaded] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [anneeActuelle, setAnneeActuelle] = useState(2026);
@@ -83,13 +77,12 @@ export default function App() {
   const [notes, setNotes] = useState({});
   const [filtreEmploye, setFiltreEmploye] = useState(null);
 
-  // Modales
   const [modalCongeOpen, setModalCongeOpen] = useState(false);
   const [modalStaffOpen, setModalStaffOpen] = useState(false);
   const [modalEvtOpen, setModalEvtOpen] = useState(false);
   const [modalNoteOpen, setModalNoteOpen] = useState(false);
   const [modalChoiceOpen, setModalChoiceOpen] = useState(null);
-  const [modalPinOpen, setModalPinOpen] = useState(false); // Nouvel état pour le PIN
+  const [modalPinOpen, setModalPinOpen] = useState(false);
   
   const [formData, setFormData] = useState({ userId: '', dateDebut: '', dateFin: '', periode: 'jour', statut: 'provisoire', category: 'conge' });
   const [staffForm, setStaffForm] = useState({ id: null, nom: '', role: 'Palefrenier', total: 25, repos: '' });
@@ -97,7 +90,6 @@ export default function App() {
   const [noteText, setNoteText] = useState("");
   const [pinInput, setPinInput] = useState("");
 
-  // --- CHARGEMENT ---
   useEffect(() => {
     async function load() {
       try {
@@ -119,14 +111,13 @@ export default function App() {
     load();
   }, []);
 
-  // --- SAUVEGARDE OPTIMISÉE ---
   useEffect(() => {
     if (!isLoaded || membresBase.length === 0) return;
     const timer = setTimeout(() => {
       supabase.from('app_state').upsert([
         { id: 'poney_equipe', data: membresBase },
         { id: 'poney_conges', data: conges },
-        { id: 'poney_evenements', evenements }, 
+        { id: 'poney_evenements', data: evenements }, 
         { id: 'poney_notes', data: notes },
         { id: 'poney_annee', data: anneeActuelle.toString() }
       ]).then();
@@ -134,7 +125,6 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [membresBase, conges, evenements, notes, anneeActuelle, isLoaded]);
 
-  // --- CALCULS ---
   const palefrenierIds = useMemo(() => new Set((membresBase || []).filter(m => m.role === 'Palefrenier').map(m => m.id)), [membresBase]);
   const equipeCalculee = useMemo(() => {
     return (membresBase || []).map(m => {
@@ -150,10 +140,9 @@ export default function App() {
     return map;
   }, [conges]);
 
-  // --- ACTIONS ---
   const checkPin = (e) => {
     e.preventDefault();
-    if (pinInput === PIN_DIRECTION) {
+    if (pinInput.toLowerCase() === PIN_DIRECTION.toLowerCase()) {
       setIsAdmin(true);
       setModalPinOpen(false);
       setPinInput("");
@@ -288,14 +277,13 @@ export default function App() {
         }
         @media (max-width: 1024px) {
           .flex-mobile { flex-direction: column !important; height: auto !important; overflow-y: auto !important; }
-          .side-mobile { width: 100% !important; border-right: none; height: auto !important; max-height: none !important; }
+          .side-mobile { width: 100% !important; border-right: none; height: auto !important; }
           .main-mobile { height: auto !important; overflow: visible !important; }
         }
       `}</style>
 
       <div className="flex h-screen flex-mobile overflow-hidden print:block print:h-auto">
         
-        {/* SIDEBAR */}
         <aside className="w-80 side-mobile bg-[#1B2A49] flex flex-col print:hidden shrink-0 shadow-xl relative z-50 text-white font-sans">
           <div className="p-6 bg-[#141D36] flex flex-col items-center border-b-4 border-[#8DC63F]">
             <img src="/logo.png" alt="Logo" className="w-20 h-20 mb-3 bg-white rounded-full p-1 shadow-lg" />
@@ -345,9 +333,7 @@ export default function App() {
           </div>
         </aside>
 
-        {/* MAIN */}
         <main className="flex-1 flex flex-col main-mobile print:block overflow-hidden relative">
-          
           <header className="h-auto py-4 bg-white/70 backdrop-blur-md border-b flex flex-col md:flex-row items-center justify-between px-6 print:hidden shrink-0 relative z-10 gap-4">
             <div className="flex items-center gap-3 shrink-0">
               <button onClick={() => setAnneeActuelle(a => a-1)} className="p-2 hover:bg-gray-100 rounded-lg border shadow-sm"><ChevronLeft/></button>
@@ -375,7 +361,7 @@ export default function App() {
             <div className="flex items-center gap-1.5"><div className="w-3 h-3 md:w-4 md:h-4 bg-[#1B2A49] rounded-sm"></div> Validé</div>
             <div className="flex items-center gap-1.5"><div className="w-3 h-3 md:w-4 md:h-4 bg-cyan-600 rounded-sm"></div> Déplacement</div>
             <div className="flex items-center gap-1.5"><div className="w-3 h-3 md:w-4 md:h-4 border border-black" style={{background: 'repeating-linear-gradient(45deg, #1B2A49, #1B2A49 2px, #22c55e 2px, #22c55e 4px)'}}></div> Provisoire</div>
-            <div className="flex items-center gap-1.5"><div className="w-4 h-1 bg-[#8B5A2B] rounded-full"></div> Concours</div>
+            <div className="flex items-center gap-1.5"><div className="w-4 h-1 bg-[#8B5A2B] rounded-full"></div> Concours Club</div>
             <div className="flex items-center gap-1.5"><div className="w-4 h-1 bg-blue-500 rounded-full"></div> Vacances GE</div>
             <div className="flex items-center gap-1.5"><div className="w-4 h-1 bg-purple-600 rounded-full"></div> Férié</div>
           </div>
@@ -385,7 +371,7 @@ export default function App() {
           </div>
         </main>
 
-        {/* --- MODALE PIN (FIX MOBILE) --- */}
+        {/* MODALE PIN (LETTRES AUTORISÉES) */}
         {modalPinOpen && (
           <div className="fixed inset-0 bg-[#1B2A49]/95 backdrop-blur-md flex items-center justify-center z-[200] p-4">
             <div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl border-4 border-[#8DC63F] text-center">
@@ -395,12 +381,10 @@ export default function App() {
                 <input 
                   autoFocus
                   type="password" 
-                  pattern="[0-9]*" 
-                  inputMode="numeric"
-                  className="w-full text-center text-4xl tracking-[1em] border-2 border-gray-200 p-4 rounded-2xl focus:border-[#8DC63F] outline-none text-[#1B2A49]"
+                  className="w-full text-center text-3xl border-2 border-gray-200 p-4 rounded-2xl focus:border-[#8DC63F] outline-none text-[#1B2A49] font-bold"
                   value={pinInput}
                   onChange={e => setPinInput(e.target.value)}
-                  placeholder="****"
+                  placeholder="Mot de passe"
                 />
                 <div className="flex gap-2">
                   <button type="button" onClick={() => setModalPinOpen(false)} className="flex-1 py-4 bg-gray-100 text-gray-500 rounded-xl font-bold uppercase">Annuler</button>
@@ -411,7 +395,6 @@ export default function App() {
           </div>
         )}
 
-        {/* MODAL ABSENCE */}
         {modalCongeOpen && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[110] p-4 text-[#1B2A49]">
             <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl border-2 border-[#1B2A49]">
@@ -444,12 +427,10 @@ export default function App() {
           </div>
         )}
 
-        {/* MODAL CHOICE / MENU UNIQUE CLIC JOUR */}
         {modalChoiceOpen && (
           <div className="fixed inset-0 bg-black/70 flex items-end md:items-center justify-center z-[110] p-4 print:hidden text-[#1B2A49]">
             <div className="bg-white rounded-t-3xl md:rounded-3xl w-full max-w-sm p-6 space-y-4 border-t-8 border-[#8DC63F] shadow-2xl relative">
               <h4 className="text-center font-black border-b pb-3 uppercase text-lg">{new Date(modalChoiceOpen).toLocaleDateString('fr-CH', {weekday:'long', day:'numeric', month:'long'})}</h4>
-              
               {isAdmin ? (
                 <div className="space-y-3">
                    <button onClick={() => { setFormData({ ...formData, dateDebut: modalChoiceOpen, dateFin: modalChoiceOpen, userId: membresBase[0]?.id }); setModalCongeOpen(true); setModalChoiceOpen(null); }} className="w-full py-4 bg-[#8DC63F] text-[#1B2A49] font-black rounded-2xl flex items-center justify-center gap-2 shadow-md hover:scale-105 transition-transform uppercase">Absence / Déplacement</button>
@@ -462,7 +443,6 @@ export default function App() {
                   <button onClick={handleAuth} className="w-full py-3 bg-[#1B2A49] text-white rounded-xl font-bold flex items-center justify-center gap-2 uppercase text-xs tracking-widest"><Lock size={14}/> Déverrouiller</button>
                 </div>
               )}
-              
               <div className="pt-2 max-h-40 overflow-y-auto space-y-1 text-center">
                  {evenements[modalChoiceOpen]?.map(e => (
                    <button key={e.id} onClick={() => isAdmin && (()=>{const nx={...evenements}; nx[modalChoiceOpen]=nx[modalChoiceOpen].filter(x=>x.id!==e.id); if(!nx[modalChoiceOpen].length) delete nx[modalChoiceOpen]; setEvenements(nx); setModalChoiceOpen(null);})()} className="w-full bg-red-50 text-red-700 text-[10px] py-1.5 rounded-lg flex items-center justify-center gap-2 border border-red-100 uppercase font-bold tracking-tighter shadow-sm"><Trash2 size={12}/> Supprimer {e.titre}</button>
@@ -479,7 +459,6 @@ export default function App() {
           </div>
         )}
 
-        {/* MODAL STAFF */}
         {modalStaffOpen && (
           <div className="fixed inset-0 bg-[#1B2A49]/95 backdrop-blur-sm flex items-center justify-center z-[110] p-4 print:hidden text-[#1B2A49]">
             <div className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl border-b-8 border-[#8DC63F]">
@@ -517,7 +496,6 @@ export default function App() {
           </div>
         )}
 
-        {/* MODAL NOTE */}
         {modalNoteOpen && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[110] p-4 text-[#1B2A49]">
              <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden border-4 border-yellow-400 shadow-2xl">
@@ -537,7 +515,6 @@ export default function App() {
           </div>
         )}
 
-        {/* MODAL ÉVÉNEMENT */}
         {modalEvtOpen && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[110] p-4 text-[#1B2A49]">
             <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl border-4 border-[#8B5A2B]">
