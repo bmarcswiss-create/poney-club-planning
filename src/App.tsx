@@ -12,7 +12,7 @@ const supabaseUrl = 'https://lnwvlyswsmtafyoepovq.supabase.co';
 const supabaseKey = 'sb_publishable_azT_rAkqeE-zsnvolYSY9w_7MtlnBVI';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const PIN_DIRECTION = "poney";
+const PIN_DIRECTION = "1234";
 
 // --- DONNÉES PCP RÉELLES ---
 const equipePCP = [
@@ -31,19 +31,39 @@ const equipePCP = [
   { id: 13, nom: "Lou", role: "Aide WE", total: 0, repos: "" },
 ];
 
+// --- CALENDRIER OFFICIEL GENÈVE (GE) 2026 ---
 const initialEvts = {
+  // Jours Fériés GE 2026
   '2026-01-01': [{ id: 'jf1', type: 'jour_ferie', titre: 'Nouvel An' }],
+  '2026-04-03': [{ id: 'jf2', type: 'jour_ferie', titre: 'Vendredi Saint' }],
+  '2026-04-06': [{ id: 'jf3', type: 'jour_ferie', titre: 'Lundi de Pâques' }],
+  '2026-05-14': [{ id: 'jf4', type: 'jour_ferie', titre: 'Ascension' }],
+  '2026-05-25': [{ id: 'jf5', type: 'jour_ferie', titre: 'Lundi de Pentecôte' }],
+  '2026-08-01': [{ id: 'jf6', type: 'jour_ferie', titre: 'Fête Nationale' }],
+  '2026-09-10': [{ id: 'jf7', type: 'jour_ferie', titre: 'Jeûne Genevois' }],
+  '2026-12-25': [{ id: 'jf8', type: 'jour_ferie', titre: 'Noël' }],
+  '2026-12-31': [{ id: 'jf9', type: 'jour_ferie', titre: 'Restauration République' }],
+
+  // Vacances Scolaires GE 2026 (DIP)
   '2026-02-16': [{ id: 'v1', type: 'vacances_ge', titre: 'Relâches' }],
   '2026-02-17': [{ id: 'v2', type: 'vacances_ge', titre: 'Relâches' }],
   '2026-02-18': [{ id: 'v3', type: 'vacances_ge', titre: 'Relâches' }],
   '2026-02-19': [{ id: 'v4', type: 'vacances_ge', titre: 'Relâches' }],
   '2026-02-20': [{ id: 'v5', type: 'vacances_ge', titre: 'Relâches' }],
-  '2026-04-03': [{ id: 'jf2', type: 'jour_ferie', titre: 'Vendredi Saint' }],
-  '2026-04-06': [{ id: 'jf3', type: 'jour_ferie', titre: 'Lundi de Pâques' }],
-  '2026-05-14': [{ id: 'jf4', type: 'jour_ferie', titre: 'Ascension' }],
-  '2026-05-25': [{ id: 'jf5', type: 'jour_ferie', titre: 'Lundi de Pentecôte' }],
-  '2026-09-10': [{ id: 'jf6', type: 'jour_ferie', titre: 'Jeûne Genevois' }],
-  '2026-12-25': [{ id: 'jf7', type: 'jour_ferie', titre: 'Noël' }],
+  // Pâques
+  '2026-04-07': [{ id: 'v6', type: 'vacances_ge', titre: 'Pâques' }],
+  '2026-04-08': [{ id: 'v7', type: 'vacances_ge', titre: 'Pâques' }],
+  '2026-04-09': [{ id: 'v8', type: 'vacances_ge', titre: 'Pâques' }],
+  '2026-04-10': [{ id: 'v9', type: 'vacances_ge', titre: 'Pâques' }],
+  // Été (début 4 juillet - fin 23 août)
+  '2026-07-06': [{ id: 'v10', type: 'vacances_ge', titre: 'Grandes Vacances' }],
+  '2026-08-21': [{ id: 'v11', type: 'vacances_ge', titre: 'Grandes Vacances' }],
+  // Automne
+  '2026-10-19': [{ id: 'v12', type: 'vacances_ge', titre: 'Automne' }],
+  '2026-10-20': [{ id: 'v13', type: 'vacances_ge', titre: 'Automne' }],
+  '2026-10-21': [{ id: 'v14', type: 'vacances_ge', titre: 'Automne' }],
+  '2026-10-22': [{ id: 'v15', type: 'vacances_ge', titre: 'Automne' }],
+  '2026-10-23': [{ id: 'v16', type: 'vacances_ge', titre: 'Automne' }],
 };
 
 const moisNoms = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
@@ -63,16 +83,19 @@ export default function App() {
   const [notes, setNotes] = useState({});
   const [filtreEmploye, setFiltreEmploye] = useState(null);
 
+  // Modales
   const [modalCongeOpen, setModalCongeOpen] = useState(false);
   const [modalStaffOpen, setModalStaffOpen] = useState(false);
   const [modalEvtOpen, setModalEvtOpen] = useState(false);
   const [modalNoteOpen, setModalNoteOpen] = useState(false);
   const [modalChoiceOpen, setModalChoiceOpen] = useState(null);
+  const [modalPinOpen, setModalPinOpen] = useState(false); // Nouvel état pour le PIN
   
   const [formData, setFormData] = useState({ userId: '', dateDebut: '', dateFin: '', periode: 'jour', statut: 'provisoire', category: 'conge' });
   const [staffForm, setStaffForm] = useState({ id: null, nom: '', role: 'Palefrenier', total: 25, repos: '' });
   const [evtForm, setEvtForm] = useState({ dateDebut: '', dateFin: '', titre: '', type: 'concours_oui' });
   const [noteText, setNoteText] = useState("");
+  const [pinInput, setPinInput] = useState("");
 
   // --- CHARGEMENT ---
   useEffect(() => {
@@ -96,18 +119,18 @@ export default function App() {
     load();
   }, []);
 
-  // --- SAUVEGARDE OPTIMISÉE (Anti-Hammering) ---
+  // --- SAUVEGARDE OPTIMISÉE ---
   useEffect(() => {
     if (!isLoaded || membresBase.length === 0) return;
     const timer = setTimeout(() => {
       supabase.from('app_state').upsert([
         { id: 'poney_equipe', data: membresBase },
         { id: 'poney_conges', data: conges },
-        { id: 'poney_evenements', data: evenements },
+        { id: 'poney_evenements', evenements }, 
         { id: 'poney_notes', data: notes },
         { id: 'poney_annee', data: anneeActuelle.toString() }
       ]).then();
-    }, 1500); // Sauvegarde seulement 1.5s après la fin de la saisie
+    }, 1500);
     return () => clearTimeout(timer);
   }, [membresBase, conges, evenements, notes, anneeActuelle, isLoaded]);
 
@@ -128,11 +151,21 @@ export default function App() {
   }, [conges]);
 
   // --- ACTIONS ---
+  const checkPin = (e) => {
+    e.preventDefault();
+    if (pinInput === PIN_DIRECTION) {
+      setIsAdmin(true);
+      setModalPinOpen(false);
+      setPinInput("");
+    } else {
+      alert("Code incorrect");
+      setPinInput("");
+    }
+  };
+
   const handleAuth = () => {
     if (isAdmin) { setIsAdmin(false); return; }
-    const p = window.prompt("Code PIN Direction :");
-    if (p === PIN_DIRECTION) setIsAdmin(true);
-    else alert("Code incorrect");
+    setModalPinOpen(true);
   };
 
   const handleSaveStaff = (e) => {
@@ -208,7 +241,7 @@ export default function App() {
 
               return (
                 <div key={dStr} onClick={() => { setSelectedDate(dStr); setModalChoiceOpen(dStr); }}
-                  className={`h-8 rounded flex items-center justify-center relative cursor-pointer overflow-hidden transition-all 
+                  className={`h-10 md:h-8 rounded flex items-center justify-center relative cursor-pointer overflow-hidden transition-all 
                   ${isAlerte ? 'bg-red-500 text-white font-bold' : isToday ? 'bg-amber-100 ring-2 ring-amber-500 z-10' : (isPast && !hasConge && evts.length === 0 ? 'bg-[#E2E8F0] opacity-50' : 'bg-[#F4F6F9]')} print:border print:border-gray-100`}>
                   {hasConge && !isAlerte && (
                     <div className="absolute inset-0 flex flex-col opacity-100">
@@ -255,7 +288,8 @@ export default function App() {
         }
         @media (max-width: 1024px) {
           .flex-mobile { flex-direction: column !important; height: auto !important; overflow-y: auto !important; }
-          .side-mobile { width: 100% !important; border-right: none; }
+          .side-mobile { width: 100% !important; border-right: none; height: auto !important; max-height: none !important; }
+          .main-mobile { height: auto !important; overflow: visible !important; }
         }
       `}</style>
 
@@ -267,8 +301,8 @@ export default function App() {
             <img src="/logo.png" alt="Logo" className="w-20 h-20 mb-3 bg-white rounded-full p-1 shadow-lg" />
             <div className="flex items-center gap-2 mb-1">
                <h2 className="text-[10px] font-extrabold uppercase bg-[#8DC63F] text-[#1B2A49] px-2 py-1 rounded">Organisation des équipes écuries</h2>
-               <button onClick={handleAuth} className={`p-1.5 rounded-md ${isAdmin ? 'bg-green-500' : 'bg-red-500'}`}>
-                  {isAdmin ? <Unlock size={14}/> : <Lock size={14}/>}
+               <button onClick={handleAuth} className={`p-3 md:p-1.5 rounded-md ${isAdmin ? 'bg-green-500' : 'bg-red-500'} active:scale-95 transition-transform`}>
+                  {isAdmin ? <Unlock size={18}/> : <Lock size={18}/>}
                </button>
             </div>
             <h1 className="text-xl font-bold uppercase tracking-tighter text-center leading-none">Poney Club<br/>Presinge</h1>
@@ -286,7 +320,7 @@ export default function App() {
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
-             <button onClick={() => setFiltreEmploye(null)} className={`w-full text-left p-2 rounded-lg text-[10px] font-black uppercase transition-all ${filtreEmploye === null ? 'bg-[#8DC63F] text-[#1B2A49]' : 'text-white/30'}`}>
+             <button onClick={() => setFiltreEmploye(null)} className={`w-full text-left p-3 rounded-lg text-[10px] font-black uppercase transition-all ${filtreEmploye === null ? 'bg-[#8DC63F] text-[#1B2A49]' : 'text-white/30'}`}>
                 <div className="flex items-center gap-2"><FilterX size={14}/> Voir toute l'équipe</div>
              </button>
              {rolesDisponibles.map(role => {
@@ -312,51 +346,70 @@ export default function App() {
         </aside>
 
         {/* MAIN */}
-        <main className="flex-1 flex flex-col print:block overflow-hidden relative">
+        <main className="flex-1 flex flex-col main-mobile print:block overflow-hidden relative">
           
-          {/* FILIGRANE LOGO */}
-          <div className="absolute inset-0 z-0 pointer-events-none opacity-[0.05] flex items-center justify-center">
-            <img src="/logo.png" alt="PCP" className="w-[60%] max-w-[700px] object-contain" />
-          </div>
-
-          <header className="h-32 bg-white/70 backdrop-blur-md border-b flex items-center justify-between px-6 print:hidden shrink-0 relative z-10">
+          <header className="h-auto py-4 bg-white/70 backdrop-blur-md border-b flex flex-col md:flex-row items-center justify-between px-6 print:hidden shrink-0 relative z-10 gap-4">
             <div className="flex items-center gap-3 shrink-0">
               <button onClick={() => setAnneeActuelle(a => a-1)} className="p-2 hover:bg-gray-100 rounded-lg border shadow-sm"><ChevronLeft/></button>
               <h2 className="text-3xl font-black">{anneeActuelle}</h2>
               <button onClick={() => setAnneeActuelle(a => a+1)} className="p-2 hover:bg-gray-100 rounded-lg border shadow-sm"><ChevronRight/></button>
             </div>
             
-            <div className={`flex-1 mx-8 h-24 rounded-2xl border-2 flex flex-col justify-center items-center transition-all shadow-sm ${congesParDate[selectedDate]?.filter(c => palefrenierIds.has(c.userId)).length > 2 ? 'bg-red-600 text-white border-red-700' : 'bg-white border-[#D0D7E1]'}`}>
-              <h3 className="text-2xl font-black uppercase text-center w-full leading-none mb-1">
+            <div className={`flex-1 w-full md:mx-8 min-h-[80px] p-2 rounded-2xl border-2 flex flex-col justify-center items-center transition-all shadow-sm ${congesParDate[selectedDate]?.filter(c => palefrenierIds.has(c.userId)).length > 2 ? 'bg-red-600 text-white border-red-700' : 'bg-white border-[#D0D7E1]'}`}>
+              <h3 className="text-xl md:text-2xl font-black uppercase text-center w-full leading-none mb-1">
                 {new Date(selectedDate).toLocaleDateString('fr-CH', {weekday:'long', day:'numeric', month:'long'})}
               </h3>
-              <div className="flex flex-wrap justify-center gap-3">
-                 {(evenements[selectedDate] || []).map(e => <span key={e.id} className="text-[11px] font-black bg-black/10 px-2 rounded">🚩 {e.titre}</span>)}
+              <div className="flex flex-wrap justify-center gap-2">
+                 {(evenements[selectedDate] || []).map(e => <span key={e.id} className="text-[10px] font-black bg-black/10 px-2 rounded">🚩 {e.titre}</span>)}
                  {(congesParDate[selectedDate] || []).map(c => (
-                   <span key={c.id} className={`text-[11px] font-bold px-2 rounded shadow-sm ${c.statut === 'provisoire' ? 'bg-yellow-400 text-black border border-black/20' : 'bg-[#1B2A49] text-white'}`}>{membresBase.find(u=>u.id===c.userId)?.nom} ({c.category === 'conge' ? '🏝️' : '✈️'})</span>
+                   <span key={c.id} className={`text-[10px] font-bold px-2 rounded shadow-sm ${c.statut === 'provisoire' ? 'bg-yellow-400 text-black border border-black/20' : 'bg-[#1B2A49] text-white'}`}>{membresBase.find(u=>u.id===c.userId)?.nom}</span>
                  ))}
-                 {notes[selectedDate] && <span className="italic text-[#8B5A2B] bg-yellow-50 px-2 rounded border border-yellow-200 shadow-sm">" {notes[selectedDate]} "</span>}
+                 {notes[selectedDate] && <span className="italic text-[#8B5A2B] bg-yellow-50 px-2 rounded border border-yellow-200 shadow-sm text-[10px]">" {notes[selectedDate]} "</span>}
               </div>
             </div>
 
-            <div className="flex gap-2">
-              <button onClick={() => window.print()} className="p-4 bg-[#1B2A49] text-[#8DC63F] rounded-2xl shadow-xl hover:scale-105 transition-transform"><Printer size={28}/></button>
-            </div>
+            <button onClick={() => window.print()} className="p-4 bg-[#1B2A49] text-[#8DC63F] rounded-2xl shadow-xl active:scale-95 transition-transform"><Printer size={24}/></button>
           </header>
 
-          <div className="bg-white/80 backdrop-blur-md px-8 py-2.5 flex justify-center gap-8 border-b text-[10px] font-black uppercase tracking-wider print:hidden relative z-10">
-            <div className="flex items-center gap-1.5"><div className="w-4 h-4 bg-[#1B2A49] rounded-sm shadow-sm"></div> Validé</div>
-            <div className="flex items-center gap-1.5"><div className="w-4 h-4 bg-cyan-600 rounded-sm shadow-sm"></div> Déplacement</div>
-            <div className="flex items-center gap-1.5"><div className="w-4 h-4 border border-black" style={{background: 'repeating-linear-gradient(45deg, #1B2A49, #1B2A49 2px, #22c55e 2px, #22c55e 4px)'}}></div> Provisoire</div>
-            <div className="flex items-center gap-1.5"><div className="w-4 h-1.5 bg-[#8B5A2B] rounded-full shadow-sm"></div> Concours</div>
-            <div className="flex items-center gap-1.5"><div className="w-4 h-1.5 bg-blue-500 rounded-full shadow-sm"></div> Vacances GE</div>
-            <div className="flex items-center gap-1.5"><div className="w-4 h-1.5 bg-purple-600 rounded-full shadow-sm"></div> Férié</div>
+          <div className="bg-white/80 backdrop-blur-md px-4 md:px-8 py-2.5 flex flex-wrap justify-center gap-x-4 gap-y-2 border-b text-[8px] md:text-[10px] font-black uppercase tracking-wider print:hidden relative z-10">
+            <div className="flex items-center gap-1.5"><div className="w-3 h-3 md:w-4 md:h-4 bg-[#1B2A49] rounded-sm"></div> Validé</div>
+            <div className="flex items-center gap-1.5"><div className="w-3 h-3 md:w-4 md:h-4 bg-cyan-600 rounded-sm"></div> Déplacement</div>
+            <div className="flex items-center gap-1.5"><div className="w-3 h-3 md:w-4 md:h-4 border border-black" style={{background: 'repeating-linear-gradient(45deg, #1B2A49, #1B2A49 2px, #22c55e 2px, #22c55e 4px)'}}></div> Provisoire</div>
+            <div className="flex items-center gap-1.5"><div className="w-4 h-1 bg-[#8B5A2B] rounded-full"></div> Concours</div>
+            <div className="flex items-center gap-1.5"><div className="w-4 h-1 bg-blue-500 rounded-full"></div> Vacances GE</div>
+            <div className="flex items-center gap-1.5"><div className="w-4 h-1 bg-purple-600 rounded-full"></div> Férié</div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 grid-print relative z-10">
+          <div className="flex-1 overflow-y-auto p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 grid-print relative z-10">
             {calendrierRender}
           </div>
         </main>
+
+        {/* --- MODALE PIN (FIX MOBILE) --- */}
+        {modalPinOpen && (
+          <div className="fixed inset-0 bg-[#1B2A49]/95 backdrop-blur-md flex items-center justify-center z-[200] p-4">
+            <div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl border-4 border-[#8DC63F] text-center">
+              <Lock className="mx-auto mb-4 text-[#1B2A49]" size={48} />
+              <h3 className="text-xl font-black uppercase mb-4 text-[#1B2A49]">Accès Direction</h3>
+              <form onSubmit={checkPin} className="space-y-4">
+                <input 
+                  autoFocus
+                  type="password" 
+                  pattern="[0-9]*" 
+                  inputMode="numeric"
+                  className="w-full text-center text-4xl tracking-[1em] border-2 border-gray-200 p-4 rounded-2xl focus:border-[#8DC63F] outline-none text-[#1B2A49]"
+                  value={pinInput}
+                  onChange={e => setPinInput(e.target.value)}
+                  placeholder="****"
+                />
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setModalPinOpen(false)} className="flex-1 py-4 bg-gray-100 text-gray-500 rounded-xl font-bold uppercase">Annuler</button>
+                  <button type="submit" className="flex-1 py-4 bg-[#1B2A49] text-[#8DC63F] rounded-xl font-black uppercase">Valider</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
         {/* MODAL ABSENCE */}
         {modalCongeOpen && (
@@ -376,6 +429,7 @@ export default function App() {
                   <input type="date" className="border-2 p-3 rounded-2xl font-bold" value={formData.dateFin} onChange={e => setFormData({...formData, dateFin: e.target.value})}/>
                 </div>
                 <select className="w-full border-2 p-3 rounded-2xl font-black text-[#1B2A49]" value={formData.userId} onChange={e => setFormData({...formData, userId: e.target.value})} required>
+                  <option value="">Choisir un employé...</option>
                   {membresBase.map(m => <option key={m.id} value={m.id}>{m.nom}</option>)}
                 </select>
                 {formData.category === 'conge' && (
@@ -403,7 +457,10 @@ export default function App() {
                    <button onClick={() => { setNoteText(notes[modalChoiceOpen] || ""); setModalNoteOpen(true); setModalChoiceOpen(null); }} className="w-full py-4 bg-yellow-400 text-[#1B2A49] font-black rounded-2xl flex items-center justify-center gap-2 shadow-md hover:scale-105 transition-transform uppercase">Post-it (Note)</button>
                 </div>
               ) : (
-                <p className="text-center text-xs italic text-gray-500 py-4 uppercase tracking-widest">Déverrouillez le cadenas pour modifier</p>
+                <div className="py-4 space-y-4">
+                  <p className="text-center text-xs italic text-gray-500 uppercase tracking-widest">Consultation seule</p>
+                  <button onClick={handleAuth} className="w-full py-3 bg-[#1B2A49] text-white rounded-xl font-bold flex items-center justify-center gap-2 uppercase text-xs tracking-widest"><Lock size={14}/> Déverrouiller</button>
+                </div>
               )}
               
               <div className="pt-2 max-h-40 overflow-y-auto space-y-1 text-center">
@@ -414,7 +471,6 @@ export default function App() {
                    <div key={a.id} className="flex gap-1 text-[#1B2A49]">
                       <button onClick={() => isAdmin && (setConges(conges.filter(x => x.id !== a.id)), setModalChoiceOpen(null))} className="flex-1 bg-orange-50 text-orange-800 text-[10px] py-1.5 rounded-lg flex items-center justify-center gap-1 border border-orange-100 uppercase font-bold tracking-tighter"><Trash2 size={12}/> {membresBase?.find(u=>u.id===a.userId)?.nom}</button>
                       {a.statut === 'provisoire' && isAdmin && <button onClick={() => { setConges(conges.map(x=>x.id===a.id?{...x, statut:'valide'}:x)); setModalChoiceOpen(null); }} className="bg-green-600 text-white text-[9px] px-2 rounded-lg font-black uppercase shadow-sm">Valider</button>}
-                      {a.groupId && isAdmin && <button onClick={() => { if(window.confirm("Supprimer toute la période ?")){ setConges(conges.filter(x=>x.groupId!==a.groupId)); setModalChoiceOpen(null); } }} className="bg-red-700 text-white text-[9px] px-2 rounded-lg font-black uppercase">Période</button>}
                    </div>
                  ))}
               </div>
@@ -438,10 +494,12 @@ export default function App() {
                        <select className="w-full border-2 p-3 rounded-2xl bg-white font-black text-[#1B2A49]" value={staffForm.role} onChange={e => setStaffForm({...staffForm, role: e.target.value})}>
                           {rolesDisponibles.map(r => <option key={r} value={r}>{r}</option>)}
                        </select>
+                       <input type="number" className="w-full border-2 p-3 rounded-2xl font-bold text-[#1B2A49]" value={staffForm.total} onChange={e => setStaffForm({...staffForm, total: e.target.value})} placeholder="Total Jours Vacances"/>
+                       <input type="text" className="w-full border-2 p-3 rounded-2xl font-bold text-[#1B2A49]" value={staffForm.repos} onChange={e => setStaffForm({...staffForm, repos: e.target.value})} placeholder="Jour(s) de repos (ex: Lundi)"/>
                        <button type="submit" className="w-full bg-[#8DC63F] text-[#1B2A49] font-black py-4 rounded-2xl shadow-xl uppercase tracking-tighter text-sm">Mise à jour</button>
                     </form>
                  </div>
-                 <div className="p-8 md:w-1/2 overflow-y-auto">
+                 <div className="p-8 md:w-1/2 overflow-y-auto bg-white">
                     <div className="space-y-2">
                        {membresBase?.map(m => (
                          <div key={m.id} className="flex justify-between items-center p-3 border-2 border-gray-100 rounded-2xl hover:bg-gray-50 transition-all text-[#1B2A49]">
