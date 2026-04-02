@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  Trash2, X, Plus, Edit, FilterX, Lock, Unlock, ChevronLeft, ChevronRight, RotateCcw, CheckCircle2, StickyNote, Calendar, ShieldCheck, UserCog, Activity, AlertTriangle, Info, TrendingUp
+  Trash2, X, Plus, Edit, FilterX, Lock, Unlock, ChevronLeft, ChevronRight, RotateCcw, CheckCircle2, StickyNote, Calendar, ShieldCheck, UserCog, Activity, AlertTriangle, Info, TrendingUp, Menu
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
@@ -46,6 +46,7 @@ export default function App() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isDirAuth, setIsDirAuth] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [anneeActuelle, setAnneeActuelle] = useState(2026);
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [membresBase, setMembresBase] = useState([]);
@@ -128,9 +129,9 @@ export default function App() {
       let date = new Date(first);
       while (date.getMonth() === mIdx) { jours.push(new Date(date)); date.setDate(date.getDate() + 1); }
       return (
-        <div key={mois} className="bg-white rounded-xl shadow border border-gray-200 overflow-hidden flex flex-col h-full relative z-10">
+        <div key={mois} className="bg-white rounded-xl shadow border border-gray-200 overflow-hidden flex flex-col h-full relative z-10 min-h-[250px]">
           <div className="bg-[#EBF2E1] py-2 text-center font-bold text-[#1B2A49] text-[10px] md:text-xs uppercase tracking-widest">{mois}</div>
-          <div className="p-1 md:p-2 grid grid-cols-7 gap-1 flex-1">
+          <div className="p-2 grid grid-cols-7 gap-1 flex-1">
             {['L','M','M','J','V','S','D'].map(day => <div key={day} className="text-center text-[9px] md:text-[10px] font-bold text-gray-400 pb-1">{day}</div>)}
             {jours.map((dateObj, idx) => {
               if (!dateObj) return <div key={idx} className="aspect-square"></div>;
@@ -140,13 +141,11 @@ export default function App() {
               const isPast = dStr < todayStr;
               const abs = filtreEmploye ? (congesParDate[dStr] || []).filter(a => String(a.userId) === String(filtreEmploye)) : (congesParDate[dStr] || []);
               const absVis = abs.filter(a => a.category !== 'maladie');
-              const isAlerte = pres.total < 4;
-
               return (
                 <div key={dStr} onClick={() => { setSelectedDate(dStr); setModalChoiceOpen(dStr); }}
-                  className={`aspect-square rounded-lg flex items-center justify-center relative cursor-pointer overflow-hidden transition-all border border-transparent
-                  ${isAlerte ? 'bg-red-600' : isToday ? 'bg-amber-100 border-orange-500 ring-2 ring-orange-500/30 z-10' : isPast ? 'bg-[#E2E8F0]' : 'bg-[#F4F6F9]'}`}>
-                  {absVis.length > 0 && !isAlerte && (
+                  className={`aspect-square rounded flex items-center justify-center relative cursor-pointer overflow-hidden border border-transparent
+                  ${pres.total < 4 ? 'bg-red-600' : isToday ? 'bg-amber-100 border-orange-500 ring-2 ring-orange-500/30 z-10' : isPast ? 'bg-[#E2E8F0]' : 'bg-[#F4F6F9]'}`}>
+                  {absVis.length > 0 && pres.total >= 4 && (
                     <div className="absolute inset-0 flex flex-col">
                       {[0, 1].map(h => {
                         const m = absVis.find(a => (h === 0 ? ['matin','jour'].includes(a.periode) : ['apres-midi','jour'].includes(a.periode)));
@@ -162,13 +161,13 @@ export default function App() {
                     </div>
                   )}
                   { (OFFICIAL_EVENTS_2026[dStr] || evenementsPerso[dStr]) && (
-                    <div className="absolute bottom-0 w-full flex flex-col gap-[0.5px]">
-                      {OFFICIAL_EVENTS_2026[dStr] && <div className="h-[1.5px] md:h-[2px] bg-purple-600 w-full"></div>}
-                      {evenementsPerso[dStr] && <div className="h-[1.5px] md:h-[2px] bg-blue-500 w-full"></div>}
+                    <div className="absolute bottom-0 w-full flex flex-col">
+                      {OFFICIAL_EVENTS_2026[dStr] && <div className="h-[1.5px] bg-purple-600 w-full"></div>}
+                      {evenementsPerso[dStr] && <div className="h-[1.5px] bg-blue-500 w-full"></div>}
                     </div>
                   )}
-                  {notes[dStr] && <div className="absolute top-0 right-0 w-1.5 h-1.5 md:w-2 md:h-2 bg-yellow-400 rounded-bl-full shadow-sm"></div>}
-                  <span className={`z-10 font-bold text-[10px] md:text-[13px] ${(isAlerte || (absVis.length > 0 && !isAlerte)) ? 'text-white' : isPast ? 'text-gray-500' : 'text-[#1B2A49]'}`}>{dateObj.getDate()}</span>
+                  {notes[dStr] && <div className="absolute top-0 right-0 w-1.5 h-1.5 bg-yellow-400 rounded-bl-full shadow-sm"></div>}
+                  <span className={`z-10 font-bold text-[10px] md:text-[12px] ${(pres.total < 4 || (absVis.length > 0 && pres.total >= 4)) ? 'text-white' : isPast ? 'text-gray-500' : 'text-[#1B2A49]'}`}>{dateObj.getDate()}</span>
                 </div>
               );
             })}
@@ -181,41 +180,48 @@ export default function App() {
   if (!isLoaded) return null;
 
   return (
-    <div className="flex flex-col md:flex-row h-screen bg-[#F0F4F8] text-[#1B2A49] overflow-hidden font-sans">
+    <div className="flex flex-col md:flex-row h-screen bg-[#F0F4F8] text-[#1B2A49] overflow-hidden font-sans relative">
       
-      {/* SIDEBAR */}
-      <aside className="w-full md:w-80 bg-[#1B2A49] flex flex-col shrink-0 shadow-xl text-white text-center z-30 overflow-hidden">
-        <div className="p-4 md:p-6 bg-[#141D36] flex flex-row md:flex-col items-center justify-between md:justify-center border-b-4 border-[#8DC63F]">
-          <img src={LOGO_URL} alt="Logo" className="w-10 h-10 md:w-24 md:h-24 bg-white rounded-full p-1" />
-          <div className="flex flex-col items-center flex-1 md:mt-2">
+      {/* BOUTON MENU MOBILE */}
+      <button onClick={() => setSidebarOpen(!sidebarOpen)} className="md:hidden fixed top-4 left-4 z-[100] p-2 bg-[#1B2A49] text-white rounded-lg shadow-lg">
+        {sidebarOpen ? <X size={20}/> : <Menu size={20}/>}
+      </button>
+
+      {/* SIDEBAR (Responsive) */}
+      <aside className={`fixed inset-y-0 left-0 transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 transition-transform duration-300 w-72 md:w-80 bg-[#1B2A49] flex flex-col shrink-0 shadow-2xl text-white text-center z-[90] overflow-hidden`}>
+        <div className="p-6 bg-[#141D36] flex flex-col items-center justify-center border-b-4 border-[#8DC63F]">
+          <img src={LOGO_URL} alt="Logo" className="w-16 h-16 md:w-24 md:h-24 bg-white rounded-full p-1 mb-2" />
+          <div className="flex flex-col items-center">
              <div className="flex items-center gap-2 mb-1">
-                <h2 className="text-[8px] md:text-[9px] font-extrabold uppercase bg-[#8DC63F] text-[#1B2A49] px-2 py-0.5 rounded">Équipe Écurie</h2>
+                <h2 className="text-[9px] font-extrabold uppercase bg-[#8DC63F] text-[#1B2A49] px-2 py-0.5 rounded">Équipe Écurie</h2>
                 <button onClick={() => { setPinInput(""); setModalPinOpen(true); }} className={`p-1 rounded ${isAdmin ? 'bg-green-500' : 'bg-red-500'}`}><Unlock size={14}/></button>
              </div>
-             <h1 className="text-xs md:text-xl font-bold uppercase leading-none md:mt-1 font-black tracking-tight">Poney Club Presinge</h1>
+             <h1 className="text-sm md:text-xl font-black uppercase tracking-tight">Poney Club Presinge</h1>
           </div>
         </div>
         
-        <div className="p-2 md:p-4 space-y-2 md:space-y-3">
+        <div className="p-4 space-y-3">
            {isAdmin && (
-             <div className="grid grid-cols-3 md:grid-cols-1 gap-2">
-                <button onClick={() => { setFormData({ ...formData, dateDebut: selectedDate, dateFin: selectedDate, category: 'conge' }); setModalCongeOpen(true); }} className="bg-[#8DC63F] text-[#1B2A49] font-black py-2 md:py-3 rounded-xl flex items-center justify-center gap-1 md:gap-2 uppercase text-[8px] md:text-xs shadow-lg active:scale-95"><Plus size={14}/> Absence</button>
-                <button onClick={() => { setEvtForm({ ...evtForm, dateDebut: selectedDate }); setModalEvtOpen(true); }} className="bg-blue-600 text-white py-2 md:py-3 rounded-xl text-[8px] md:text-xs font-black uppercase flex items-center justify-center gap-1"><Calendar size={14}/> Event</button>
-                <button onClick={() => { setNoteText(notes[selectedDate] || ""); setModalNoteOpen(true); }} className="bg-yellow-400 text-[#1B2A49] py-2 md:py-3 rounded-xl text-[8px] md:text-xs font-black uppercase flex items-center justify-center gap-1"><StickyNote size={14}/> Post-it</button>
+             <div className="flex flex-col gap-2">
+                <button onClick={() => { setFormData({ ...formData, dateDebut: selectedDate, dateFin: selectedDate, category: 'conge' }); setModalCongeOpen(true); setSidebarOpen(false); }} className="w-full bg-[#8DC63F] text-[#1B2A49] font-black py-3 rounded-xl flex items-center justify-center gap-2 uppercase text-[10px] md:text-xs shadow-lg active:scale-95"><Plus size={16}/> Absence</button>
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={() => { setEvtForm({ ...evtForm, dateDebut: selectedDate }); setModalEvtOpen(true); setSidebarOpen(false); }} className="bg-blue-600 text-white py-2 rounded-xl text-[9px] font-black uppercase flex items-center justify-center gap-1"><Calendar size={12}/> Event</button>
+                  <button onClick={() => { setNoteText(notes[selectedDate] || ""); setModalNoteOpen(true); setSidebarOpen(false); }} className="bg-yellow-400 text-[#1B2A49] py-2 rounded-xl text-[9px] font-black uppercase flex items-center justify-center gap-1"><StickyNote size={12}/> Post-it</button>
+                </div>
              </div>
            )}
-           <button onClick={() => setFiltreEmploye(null)} className={`w-full bg-white/10 text-white font-bold py-2 rounded-xl text-[9px] md:text-xs ${!filtreEmploye ? 'ring-2 ring-[#8DC63F]' : ''}`}><FilterX size={14} className="inline mr-1"/> TOUTE L'ÉQUIPE</button>
+           <button onClick={() => { setFiltreEmploye(null); setSidebarOpen(false); }} className={`w-full bg-white/10 text-white font-bold py-2.5 rounded-xl text-[10px] md:text-xs ${!filtreEmploye ? 'ring-2 ring-[#8DC63F]' : ''}`}><FilterX size={14} className="inline mr-1"/> TOUTE L'ÉQUIPE</button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 text-left hidden md:block">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 text-left">
            {["Palefrenier", "Apprentie", "Monitrice", "Aide WE", "Aide ponctuel"].map(role => {
              const mm = membresBase.filter(m => m.role === role);
              if (!mm.length) return null;
              return (
-               <div key={role} className="text-white">
+               <div key={role}>
                  <h4 className="text-[10px] opacity-40 uppercase font-black tracking-widest border-b border-white/10 mb-2">{role}s</h4>
                  {mm.map(m => (
-                   <div key={m.id} onClick={() => setFiltreEmploye(filtreEmploye === m.id ? null : m.id)} className={`p-3 rounded-xl mb-1 cursor-pointer transition-all ${filtreEmploye === m.id ? 'bg-[#8DC63F] text-[#1B2A49] font-bold' : 'bg-[#213459] text-white/80'}`}>
+                   <div key={m.id} onClick={() => { setFiltreEmploye(filtreEmploye === m.id ? null : m.id); setSidebarOpen(false); }} className={`p-3 rounded-xl mb-1 cursor-pointer transition-all ${filtreEmploye === m.id ? 'bg-[#8DC63F] text-[#1B2A49] font-bold' : 'bg-[#213459] text-white/80 hover:bg-[#2a3e66]'}`}>
                      <span className="text-sm font-bold block">{m.nom}</span>
                      <div className="flex gap-1 mt-1 font-mono text-[9px] font-black uppercase">{['L','M','M','J','V','S','D'].map((l, i) => <span key={i} className={m.repos?.includes(JOURS_SEMAINE[i]) ? "text-red-400" : "text-green-400"}>{l}</span>)}</div>
                    </div>
@@ -224,41 +230,42 @@ export default function App() {
              );
            })}
         </div>
-        <div className="p-2 md:p-4 border-t border-white/10 space-y-2">
-          {isAdmin && <button onClick={() => setModalStaffOpen(true)} className="w-full p-2 bg-white/5 hover:bg-white/10 rounded-lg text-[8px] md:text-[9px] uppercase font-bold flex items-center justify-center gap-2"><UserCog size={12}/> Config. Staff</button>}
-          <button onClick={() => { setDirPinInput(""); setIsDirAuth(false); setModalDirOpen(true); }} className="w-full p-2 bg-purple-600/30 hover:bg-purple-600/50 rounded-lg text-[8px] md:text-[9px] uppercase font-bold flex items-center justify-center gap-2"><ShieldCheck size={12}/> Accès Direction</button>
+        <div className="p-4 border-t border-white/10 space-y-2 shrink-0">
+          {isAdmin && <button onClick={() => { setModalStaffOpen(true); setSidebarOpen(false); }} className="w-full p-2 bg-white/5 hover:bg-white/10 rounded-lg text-[9px] uppercase font-bold flex items-center justify-center gap-2"><UserCog size={12}/> Staff</button>}
+          <button onClick={() => { setDirPinInput(""); setModalDirOpen(true); setSidebarOpen(false); }} className="w-full p-2 bg-purple-600/30 hover:bg-purple-600/50 rounded-lg text-[9px] uppercase font-bold flex items-center justify-center gap-2"><ShieldCheck size={12}/> Direction</button>
         </div>
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-slate-50">
-        {/* BANDEAU SUPÉRIEUR (Recentré) */}
-        <header className="bg-white border-b flex flex-col items-center justify-center px-4 py-4 md:h-40 shrink-0 gap-2 overflow-hidden">
+        {/* HEADER (Responsive) */}
+        <header className="bg-white border-b flex flex-col items-center justify-center px-4 py-4 md:h-36 shrink-0 gap-2">
           <div className="flex items-center gap-4">
-            <button onClick={() => setAnneeActuelle(a => a-1)} className="p-2 border rounded-lg bg-gray-50"><ChevronLeft size={18}/></button>
-            <h2 className="text-xl md:text-2xl font-black tracking-tighter text-[#1B2A49]">{anneeActuelle}</h2>
-            <button onClick={() => setAnneeActuelle(a => a+1)} className="p-2 border rounded-lg bg-gray-50"><ChevronRight size={18}/></button>
+            <button onClick={() => setAnneeActuelle(a => a-1)} className="p-2 border rounded-lg bg-gray-50 hover:bg-gray-100 transition-all"><ChevronLeft size={16}/></button>
+            <h2 className="text-lg md:text-2xl font-black text-[#1B2A49]">{anneeActuelle}</h2>
+            <button onClick={() => setAnneeActuelle(a => a+1)} className="p-2 border rounded-lg bg-gray-50 hover:bg-gray-100 transition-all"><ChevronRight size={16}/></button>
           </div>
           
-          <div className={`w-full max-w-xl rounded-2xl border-2 flex flex-col justify-center items-center p-3 transition-all shadow-lg overflow-hidden ${selectedDate === todayStr ? 'border-orange-500' : 'border-[#D0D7E1]'} ${getDayPresence(selectedDate).total < 4 ? 'bg-red-600 text-white animate-pulse' : 'bg-white'}`}>
-            <h3 className="text-xs md:text-sm font-black uppercase text-center mb-1 line-clamp-1">{new Date(selectedDate).toLocaleDateString('fr-CH', {weekday:'long', day:'numeric', month:'long'})}</h3>
+          <div className={`w-full max-w-xl rounded-2xl border-2 flex flex-col justify-center items-center p-3 transition-all shadow-md ${selectedDate === todayStr ? 'border-orange-500' : 'border-[#D0D7E1]'} ${getDayPresence(selectedDate).total < 4 ? 'bg-red-600 text-white animate-pulse' : 'bg-white'}`}>
+            <h3 className="text-[10px] md:text-sm font-black uppercase text-center mb-1">{new Date(selectedDate).toLocaleDateString('fr-CH', {weekday:'long', day:'numeric', month:'long'})}</h3>
             
-            <div className="flex flex-wrap justify-center gap-1 mb-1">
+            <div className="flex flex-wrap justify-center gap-2 mb-1">
                 {[...(OFFICIAL_EVENTS_2026[selectedDate] || []), ...(evenementsPerso[selectedDate] || [])].map((e, i) => (
                   <span key={i} className="text-[8px] md:text-[9px] font-black uppercase text-red-600">🚩 {e.titre}</span>
                 ))}
             </div>
 
-            <div className="flex flex-col items-center w-full max-w-full">
-                <div className="flex items-center gap-3 md:gap-4 bg-[#1B2A49] px-4 md:px-8 py-1.5 rounded-full text-white shadow-md mb-1 max-w-full">
-                   <span className="text-[#8DC63F] font-black text-xl md:text-2xl">{getDayPresence(selectedDate).total}</span>
-                   <div className="text-[8px] md:text-[11px] font-bold leading-tight line-clamp-2 overflow-hidden text-center md:text-left">
-                      {getDayPresence(selectedDate).scheduled.map((p, i) => <span key={p.id}>{p.nom}{i < getDayPresence(selectedDate).scheduled.length - 1 || getDayPresence(selectedDate).ponctuel.length > 0 || getDayPresence(selectedDate).malades.length > 0 ? ',' : ''} </span>)}
-                      {getDayPresence(selectedDate).ponctuel.map((p, i) => <span key={p.id} className="text-cyan-300 italic font-black"> (+ {p.nom}){i < getDayPresence(selectedDate).ponctuel.length - 1 || getDayPresence(selectedDate).malades.length > 0 ? ',' : ''} </span>)}
-                      {getDayPresence(selectedDate).malades.map((p, i) => <span key={p.id} className="text-orange-400 font-black uppercase"> (- {p.nom}){i < getDayPresence(selectedDate).malades.length - 1 ? ',' : ''} </span>)}
+            <div className="flex flex-col items-center w-full">
+                <div className="flex items-center gap-3 bg-[#1B2A49] px-4 py-1.5 rounded-full text-white shadow-md mb-1 max-w-full overflow-hidden">
+                   <span className="text-[#8DC63F] font-black text-lg md:text-2xl">{getDayPresence(selectedDate).total}</span>
+                   <div className="text-[8px] md:text-[11px] font-bold leading-tight flex flex-wrap gap-x-1 truncate">
+                      {getDayPresence(selectedDate).scheduled.map((p, i) => <span key={p.id}>{p.nom}{i < getDayPresence(selectedDate).scheduled.length - 1 || getDayPresence(selectedDate).ponctuel.length > 0 || getDayPresence(selectedDate).malades.length > 0 ? ',' : ''}</span>)}
+                      {getDayPresence(selectedDate).ponctuel.map((p, i) => <span key={p.id} className="text-cyan-300 italic font-black"> (+ {p.nom}){i < getDayPresence(selectedDate).ponctuel.length - 1 || getDayPresence(selectedDate).malades.length > 0 ? ',' : ''}</span>)}
+                      {getDayPresence(selectedDate).malades.map((p, i) => <span key={p.id} className="text-orange-400 font-black uppercase"> (- {p.nom}){i < getDayPresence(selectedDate).malades.length - 1 ? ',' : ''}</span>)}
                    </div>
                 </div>
+                
                 {getDayPresence(selectedDate).absentsPlanifies.length > 0 && (
-                   <div className="flex items-center gap-1.5 text-[8px] md:text-[10px] font-bold text-gray-400 italic line-clamp-1">
+                   <div className="flex items-center gap-1.5 text-[8px] md:text-[10px] font-bold text-gray-400 italic">
                       <Info size={10}/> {getDayPresence(selectedDate).absentsPlanifies.map((a, i) => <span key={i}>{a.nom} ({a.type === 'conge' ? '🏝️' : '✈️'}){i < getDayPresence(selectedDate).absentsPlanifies.length - 1 ? ', ' : ''}</span>)}
                    </div>
                 )}
@@ -266,15 +273,15 @@ export default function App() {
           </div>
         </header>
 
-        <div className="bg-white px-2 md:px-4 py-2 flex justify-center gap-3 md:gap-8 border-b text-[7px] md:text-[9px] font-black uppercase tracking-wider shrink-0 overflow-x-auto whitespace-nowrap scrollbar-hide">
+        <div className="bg-white px-4 py-2 flex justify-center gap-3 md:gap-8 border-b text-[7px] md:text-[9px] font-black uppercase tracking-wider shrink-0 overflow-x-auto whitespace-nowrap">
           <div className="flex items-center gap-1 text-cyan-600 italic font-black"><CheckCircle2 size={10}/> Ponctuel</div>
           <div className="flex items-center gap-1 text-orange-500 font-black uppercase">Maladie</div>
-          <div className="flex items-center gap-1"><div className="w-2.5 h-2.5 md:w-3 md:h-3" style={{ background: 'repeating-linear-gradient(45deg, #15803d, #15803d 2px, #1B2A49 2px, #1B2A49 4px)' }}></div> Provisoire</div>
-          <div className="flex items-center gap-1"><div className="w-3 md:w-4 h-[2px] md:h-[3px] bg-purple-600"></div> Fériés / GE</div>
-          <div className="flex items-center gap-1"><div className="w-3 md:w-4 h-[2px] md:h-[3px] bg-blue-500"></div> Club</div>
+          <div className="flex items-center gap-1"><div className="w-2.5 h-2.5" style={{ background: 'repeating-linear-gradient(45deg, #15803d, #15803d 2px, #1B2A49 2px, #1B2A49 4px)' }}></div> Provisoire</div>
+          <div className="flex items-center gap-1"><div className="w-3 h-[2px] bg-purple-600"></div> Fériés</div>
+          <div className="flex items-center gap-1"><div className="w-3 h-[2px] bg-blue-500"></div> Club</div>
         </div>
         
-        <div className="flex-1 overflow-y-auto p-2 md:p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6 bg-slate-50">
+        <div className="flex-1 overflow-y-auto p-3 md:p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 bg-slate-50">
           {calendrierRender}
         </div>
       </main>
@@ -283,8 +290,8 @@ export default function App() {
       {modalChoiceOpen && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[500] p-4 text-[#1B2A49]">
           <div className="bg-white rounded-[2rem] w-full max-w-sm p-5 space-y-4 border-t-8 border-[#8DC63F] shadow-2xl relative text-center max-h-[90vh] overflow-y-auto">
-            <h4 className="font-black uppercase text-sm md:text-base border-b pb-2">{new Date(modalChoiceOpen).toLocaleDateString('fr-CH', {weekday:'long', day:'numeric', month:'long'})}</h4>
-            <div className="grid grid-cols-2 gap-2 text-left bg-gray-50 p-3 rounded-xl">
+            <h4 className="font-black uppercase text-xs md:text-sm border-b pb-2">{new Date(modalChoiceOpen).toLocaleDateString('fr-CH', {weekday:'long', day:'numeric', month:'long'})}</h4>
+            <div className="grid grid-cols-2 gap-2 text-left bg-gray-50 p-3 rounded-xl overflow-y-auto">
                {membresBase.map(m => {
                   const pres = getDayPresence(modalChoiceOpen);
                   const isPresent = pres.scheduled.some(p => p.id === m.id) || pres.ponctuel.some(p => p.id === m.id);
@@ -311,26 +318,26 @@ export default function App() {
         </div>
       )}
 
-      {/* MODALE DIRECTION - ACCÈS SÉCURISÉ RE-TESTÉ */}
+      {/* MODALE DIRECTION */}
       {modalDirOpen && (
-        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[800] p-2 md:p-4 text-[#1B2A49]">
+        <div className="fixed inset-0 bg-black/95 flex items-center justify-center z-[1000] p-2 md:p-4 text-[#1B2A49]">
           <div className="bg-white rounded-[2rem] w-full max-w-5xl max-h-[95vh] overflow-hidden flex flex-col shadow-2xl border-t-8 border-purple-600">
             <div className="p-4 md:p-6 bg-purple-600 text-white flex justify-between items-center shrink-0">
-              <h2 className="text-sm md:text-xl font-black uppercase flex items-center gap-2"><ShieldCheck size={20}/> Direction - analyses PCP</h2>
+              <h2 className="text-sm md:text-xl font-black uppercase flex items-center gap-2"><ShieldCheck size={18}/> Direction 2026</h2>
               <X onClick={() => { setIsDirAuth(false); setModalDirOpen(false); }} className="cursor-pointer" size={24}/>
             </div>
             
             {!isDirAuth ? (
-              <div className="flex-1 flex flex-col items-center justify-center p-8 space-y-6 text-center">
+              <div className="flex-1 flex flex-col items-center justify-center p-8 space-y-6 text-center bg-white">
                 <Lock size={48} className="text-purple-200 mb-2"/>
-                <input autoFocus type="password" placeholder="Mot de passe" className="w-full max-w-xs text-center text-xl md:text-2xl border-b-4 border-purple-600 p-3 outline-none" value={dirPinInput} onChange={e => setDirPinInput(e.target.value)} onKeyDown={e => { if(e.key==='Enter' && dirPinInput === PIN_DIRECTION) setIsDirAuth(true); }}/>
+                <input autoFocus type="password" placeholder="Mot de passe" className="w-full max-w-xs text-center text-xl border-b-4 border-purple-600 p-3 outline-none" value={dirPinInput} onChange={e => setDirPinInput(e.target.value)} onKeyDown={e => { if(e.key==='Enter' && dirPinInput === PIN_DIRECTION) setIsDirAuth(true); }}/>
                 <button onClick={() => { if(dirPinInput === PIN_DIRECTION) setIsDirAuth(true); else alert("Accès refusé"); }} className="w-full max-w-xs bg-purple-600 text-white py-4 rounded-xl font-bold uppercase active:scale-95 transition-all">Accéder</button>
               </div>
             ) : (
               <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-gray-50 space-y-6 md:space-y-10">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                    <div className="bg-white p-6 rounded-3xl border shadow-sm">
-                      <div className="text-[10px] font-black uppercase mb-4 flex items-center gap-2 text-red-600"><AlertTriangle size={16}/> Criticité par Jour</div>
+                      <div className="text-[10px] font-black uppercase mb-4 flex items-center gap-2 text-red-600"><AlertTriangle size={16}/> Risque par Jour</div>
                       <div className="space-y-3">
                          {JOURS_SEMAINE.map((jour, idx) => {
                             const manques = [12, 5, 8, 18, 4, 25, 30][idx];
@@ -348,7 +355,7 @@ export default function App() {
                    </div>
 
                    <div className="bg-white p-6 rounded-3xl border shadow-sm flex flex-col">
-                      <div className="text-[10px] font-black uppercase mb-6 flex justify-between items-center">Présence Moyenne <TrendingUp size={14}/></div>
+                      <div className="text-[10px] font-black uppercase mb-6 flex justify-between items-center">Présence (%) <TrendingUp size={14}/></div>
                       <div className="flex-1 flex items-end gap-2 md:gap-4 h-32 px-2 border-b">
                          {[85, 88, 92, 70, 95, 85, 90, 80, 75, 88, 85, 90].map((v, i) => (
                            <div key={i} className="flex-1 bg-[#8DC63F] rounded-t-md relative group transition-all" style={{height: `${v}%`}}>
@@ -405,18 +412,17 @@ export default function App() {
         </div>
       )}
 
-      {/* AUTRES MODALES - PIN ADMIN */}
+      {/* AUTRES MODALES (PIN, STAFF, NOTE, EVENT) */}
       {modalPinOpen && (
-        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[700] p-4 text-[#1B2A49]"><div className="bg-white rounded-3xl p-8 w-full max-w-sm text-center shadow-2xl"><Lock className="mx-auto mb-4" size={40} /><form onSubmit={(e) => { e.preventDefault(); if (pinInput.toLowerCase() === PIN_ADMIN) { setIsAdmin(true); setModalPinOpen(false); setPinInput(""); } else { alert("Code incorrect"); } }} className="space-y-4"><input autoFocus type="password" placeholder="PIN" className="w-full text-center text-3xl border-b-4 border-[#1B2A49] p-3 outline-none" value={pinInput} onChange={e => setPinInput(e.target.value)} /><button type="submit" className="w-full py-4 bg-[#1B2A49] text-white rounded-xl font-bold uppercase active:scale-95 transition-all">Valider</button></form></div></div>
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[700] p-4 text-[#1B2A49]"><div className="bg-white rounded-3xl p-8 w-full max-w-sm text-center shadow-2xl"><Lock className="mx-auto mb-4" size={40} /><form onSubmit={(e) => { e.preventDefault(); if (pinInput.toLowerCase() === PIN_ADMIN) { setIsAdmin(true); setModalPinOpen(false); setPinInput(""); } else { alert("Code incorrect"); } }} className="space-y-4"><input autoFocus type="password" placeholder="PIN" className="w-full text-center text-3xl border-b-4 border-[#1B2A49] p-3 outline-none" value={pinInput} onChange={e => setPinInput(e.target.value)} /><button type="submit" className="w-full py-4 bg-[#1B2A49] text-white rounded-xl font-bold uppercase active:scale-95 transition-all text-xs">Déverrouiller</button></form></div></div>
       )}
 
-      {/* MODALE STAFF */}
       {modalStaffOpen && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[600] p-2 text-[#1B2A49]">
           <div className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl">
             <div className="bg-[#1B2A49] p-4 text-white flex justify-between items-center uppercase font-bold text-xs md:text-sm">Gestion Staff Écurie<X onClick={() => setModalStaffOpen(false)} className="cursor-pointer" size={20}/></div>
             <div className="flex flex-col md:flex-row p-4 gap-6 max-h-[80vh] overflow-y-auto">
-               <form onSubmit={async (e) => { e.preventDefault(); const nI = staffForm.id || Date.now().toString(); const up = staffForm.id ? membresBase.map(m => m.id === staffForm.id ? staffForm : m) : [...membresBase, { ...staffForm, id: nI }]; setMembresBase(up); setModalStaffOpen(false); await syncAll(up, conges, notes, evenementsPerso, manualPresence); }} className="flex-1 space-y-4 text-left"><label className="block text-[10px] font-black uppercase opacity-50 ml-1">Nom complet</label><input className="w-full border-2 p-3 md:p-4 rounded-xl font-bold text-[#1B2A49]" value={staffForm.nom} onChange={e => setStaffForm({...staffForm, nom: e.target.value})} required placeholder="Nom"/><select className="w-full border-2 p-3 md:p-4 rounded-xl font-black text-[#1B2A49]" value={staffForm.role} onChange={e => setStaffForm({...staffForm, role: e.target.value})}>{["Palefrenier", "Apprentie", "Monitrice", "Aide WE", "Aide ponctuel"].map(r => <option key={r} value={r}>{r}</option>)}</select><button type="submit" className="w-full bg-[#1B2A49] text-white py-4 rounded-xl font-black uppercase active:scale-95">Sauvegarder</button></form>
+               <form onSubmit={async (e) => { e.preventDefault(); const nI = staffForm.id || Date.now().toString(); const up = staffForm.id ? membresBase.map(m => m.id === staffForm.id ? staffForm : m) : [...membresBase, { ...staffForm, id: nI }]; setMembresBase(up); setModalStaffOpen(false); await syncAll(up, conges, notes, evenementsPerso, manualPresence); }} className="flex-1 space-y-4 text-left"><label className="block text-[10px] font-black uppercase opacity-50 ml-1">Nom complet</label><input className="w-full border-2 p-3 md:p-4 rounded-xl font-bold text-[#1B2A49]" value={staffForm.nom} onChange={e => setStaffForm({...staffForm, nom: e.target.value})} required placeholder="Nom"/><select className="w-full border-2 p-3 md:p-4 rounded-xl font-black text-[#1B2A49]" value={staffForm.role} onChange={e => setStaffForm({...staffForm, role: e.target.value})}>{["Palefrenier", "Apprentie", "Monitrice", "Aide WE", "Aide ponctuel"].map(r => <option key={r} value={r}>{r}</option>)}</select><button type="submit" className="w-full bg-[#1B2A49] text-white py-4 rounded-xl font-black uppercase active:scale-95 text-xs">Sauvegarder</button></form>
                <div className="md:w-1/2 overflow-y-auto border-t md:border-l pt-4 md:pl-4 text-left">
                  {membresBase.map(m => (
                    <div key={m.id} className="flex justify-between items-center p-2 border-b"><span className="text-xs font-bold text-[#1B2A49]">{m.nom}</span><div className="flex gap-2"><button onClick={() => setStaffForm(m)} className="text-blue-600 p-2"><Edit size={16}/></button><button onClick={async () => { if(confirm("Supprimer ?")) { const u = membresBase.filter(x => x.id !== m.id); setMembresBase(u); await syncAll(u, conges, notes, evenementsPerso, manualPresence); }}} className="text-red-600 p-2"><Trash2 size={16}/></button></div></div>
@@ -427,7 +433,6 @@ export default function App() {
         </div>
       )}
 
-      {/* MODALE ABSENCE */}
       {modalCongeOpen && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[600] p-4 text-[#1B2A49]">
           <div className="bg-white rounded-[2rem] w-full max-w-md overflow-hidden shadow-2xl border-2 border-[#1B2A49]">
@@ -440,25 +445,24 @@ export default function App() {
               </select>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3"><input type="date" className="border-2 p-3 md:p-4 rounded-xl font-bold text-xs md:text-sm" value={formData.dateDebut} onChange={e => setFormData({...formData, dateDebut: e.target.value})} required/><input type="date" className="border-2 p-3 md:p-4 rounded-xl font-bold text-xs md:text-sm" value={formData.dateFin} onChange={e => setFormData({...formData, dateFin: e.target.value})}/></div>
               <select className="w-full border-2 p-3 md:p-4 rounded-xl font-black text-xs md:text-sm" value={formData.userId} onChange={e => setFormData({...formData, userId: e.target.value})} required><option value="">-- Choisir employé --</option>{membresBase.map(m => <option key={m.id} value={m.id}>{m.nom}</option>)}</select>
-              <button type="submit" className="w-full bg-[#1B2A49] text-white py-4 rounded-2xl font-black uppercase text-xs md:text-sm active:scale-95">Confirmer</button>
+              <button type="submit" className="w-full bg-[#1B2A49] text-white py-4 rounded-2xl font-black uppercase text-xs md:text-sm active:scale-95 transition-all">Confirmer</button>
             </form>
           </div>
         </div>
       )}
 
-      {/* MODALES NOTES & EVENTS */}
       {modalNoteOpen && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[600] p-4 text-[#1B2A49]">
           <div className="bg-white rounded-[2rem] w-full max-w-sm overflow-hidden border-4 border-yellow-400 shadow-2xl text-center">
-            <div className="p-4 bg-yellow-400 font-black flex justify-between uppercase italic text-[10px] md:text-xs">Post-it PCP<X onClick={() => setModalNoteOpen(false)} className="cursor-pointer" size={18}/></div>
-            <form onSubmit={async (e) => { e.preventDefault(); const nx = { ...notes }; if (!noteText.trim()) delete nx[selectedDate]; else nx[selectedDate] = noteText; setNotes(nx); setModalNoteOpen(false); await syncAll(membresBase, conges, nx, evenementsPerso, manualPresence); }} className="p-6 space-y-4"><textarea autoFocus className="w-full border-2 border-yellow-100 p-5 rounded-2xl bg-yellow-50 outline-none h-40 font-bold text-[#1B2A49] text-sm md:text-base" value={noteText} onChange={e => setNoteText(e.target.value)} placeholder="Message..."/><button type="submit" className="w-full bg-yellow-400 text-[#1B2A49] font-black py-4 rounded-xl uppercase active:scale-95 transition-all text-xs md:text-sm">Enregistrer</button></form>
+            <div className="p-4 bg-yellow-400 font-black flex justify-between uppercase italic text-[10px] md:text-xs">Post-it Écurie<X onClick={() => setModalNoteOpen(false)} className="cursor-pointer" size={18}/></div>
+            <form onSubmit={async (e) => { e.preventDefault(); const nx = { ...notes }; if (!noteText.trim()) delete nx[selectedDate]; else nx[selectedDate] = noteText; setNotes(nx); setModalNoteOpen(false); await syncAll(membresBase, conges, nx, evenementsPerso, manualPresence); }} className="p-6 space-y-4"><textarea autoFocus className="w-full border-2 border-yellow-100 p-5 rounded-2xl bg-yellow-50 outline-none h-40 font-bold text-[#1B2A49] text-sm md:text-base" value={noteText} onChange={e => setNoteText(e.target.value)} placeholder="Message..."/><button type="submit" className="w-full bg-yellow-400 text-[#1B2A49] font-black py-4 rounded-xl uppercase active:scale-95 text-xs md:text-sm">Enregistrer</button></form>
           </div>
         </div>
       )}
 
       {modalEvtOpen && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[600] p-4 text-[#1B2A49]">
-          <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl relative text-center"><X className="absolute top-4 right-4 cursor-pointer text-gray-400" onClick={() => setModalEvtOpen(false)} size={20}/><h3 className="font-black uppercase mb-6 text-sm md:text-base">Event PCP</h3><form onSubmit={async (e) => { e.preventDefault(); const nx = { ...evenementsPerso }; const date = evtForm.dateDebut; nx[date] = [...(nx[date] || []), { id: Date.now(), titre: evtForm.titre, type: evtForm.type }]; setEvenementsPerso(nx); setModalEvtOpen(false); await syncAll(membresBase, conges, notes, nx, manualPresence); }} className="space-y-4"><input type="date" className="w-full border-2 p-3 md:p-4 rounded-xl font-bold text-[#1B2A49] text-sm" value={evtForm.dateDebut} onChange={e => setEvtForm({...evtForm, dateDebut: e.target.value})}/><input type="text" className="w-full border-2 p-3 md:p-4 rounded-xl font-black text-[#1B2A49] text-sm" placeholder="Nom event" value={evtForm.titre} onChange={e => setEvtForm({...evtForm, titre: e.target.value})} required/><button type="submit" className="w-full bg-[#1B2A49] text-[#8DC63F] py-4 rounded-xl font-black uppercase active:scale-95 text-xs md:text-sm">Ajouter</button></form></div>
+          <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl relative text-center"><X className="absolute top-4 right-4 cursor-pointer text-gray-400" onClick={() => setModalEvtOpen(false)} size={20}/><h3 className="font-black uppercase mb-6 text-sm md:text-base">Event Écurie</h3><form onSubmit={async (e) => { e.preventDefault(); const nx = { ...evenementsPerso }; const date = evtForm.dateDebut; nx[date] = [...(nx[date] || []), { id: Date.now(), titre: evtForm.titre, type: evtForm.type }]; setEvenementsPerso(nx); setModalEvtOpen(false); await syncAll(membresBase, conges, notes, nx, manualPresence); }} className="space-y-4"><input type="date" className="w-full border-2 p-3 md:p-4 rounded-xl font-bold text-[#1B2A49] text-sm" value={evtForm.dateDebut} onChange={e => setEvtForm({...evtForm, dateDebut: e.target.value})}/><input type="text" className="w-full border-2 p-3 md:p-4 rounded-xl font-black text-[#1B2A49] text-sm" placeholder="Nom event" value={evtForm.titre} onChange={e => setEvtForm({...evtForm, titre: e.target.value})} required/><button type="submit" className="w-full bg-[#1B2A49] text-[#8DC63F] py-4 rounded-xl font-black uppercase active:scale-95 text-xs md:text-sm">Ajouter</button></form></div>
         </div>
       )}
 
