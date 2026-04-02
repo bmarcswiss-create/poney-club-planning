@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  Calendar as CalendarIcon, Trash2, X, Plus, Settings, Edit, FilterX, Lock, Unlock, Printer, ChevronLeft, ChevronRight, StickyNote 
+  Calendar as CalendarIcon, Trash2, X, Plus, Settings, Edit, FilterX, Lock, Unlock, Printer, ChevronLeft, ChevronRight, StickyNote, CheckCircle2, RotateCcw 
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
@@ -27,7 +27,8 @@ const OFFICIAL_EVENTS = {
   '2026-01-02': [{ titre: 'Vacances Noël', type: 'vacances_ge' }],
   '2026-02-23': [{ titre: 'Relâches', type: 'vacances_ge' }], '2026-02-24': [{ titre: 'Relâches', type: 'vacances_ge' }], '2026-02-25': [{ titre: 'Relâches', type: 'vacances_ge' }], '2026-02-26': [{ titre: 'Relâches', type: 'vacances_ge' }], '2026-02-27': [{ titre: 'Relâches', type: 'vacances_ge' }],
   '2026-05-15': [{ titre: 'Pont Ascension', type: 'vacances_ge' }],
-  '2026-06-29': [{ titre: 'Vacances été', type: 'vacances_ge' }]
+  '2026-06-29': [{ titre: 'Vacances été', type: 'vacances_ge' }],
+  '2026-10-19': [{ titre: 'Automne', type: 'vacances_ge' }], '2026-10-20': [{ titre: 'Automne', type: 'vacances_ge' }], '2026-10-21': [{ titre: 'Automne', type: 'vacances_ge' }], '2026-10-22': [{ titre: 'Automne', type: 'vacances_ge' }], '2026-10-23': [{ titre: 'Automne', type: 'vacances_ge' }],
 };
 
 export default function App() {
@@ -41,6 +42,7 @@ export default function App() {
   const [evenementsPerso, setEvenementsPerso] = useState({});
   const [aidesPonctuelles, setAidesPonctuelles] = useState({}); 
   const [filtreEmploye, setFiltreEmploye] = useState(null);
+  const [history, setHistory] = useState([]);
 
   const [modalCongeOpen, setModalCongeOpen] = useState(false);
   const [modalStaffOpen, setModalStaffOpen] = useState(false);
@@ -64,6 +66,25 @@ export default function App() {
     });
     return result;
   }, [anneeActuelle, evenementsPerso]);
+
+  const pushToHistory = () => {
+    const snapshot = {
+      membresBase: JSON.parse(JSON.stringify(membresBase)),
+      conges: JSON.parse(JSON.stringify(conges)),
+      notes: JSON.parse(JSON.stringify(notes)),
+      evenementsPerso: JSON.parse(JSON.stringify(evenementsPerso)),
+      aidesPonctuelles: JSON.parse(JSON.stringify(aidesPonctuelles))
+    };
+    setHistory(prev => [snapshot, ...prev].slice(0, 10));
+  };
+
+  const handleUndo = () => {
+    if (history.length === 0) return;
+    const last = history[0];
+    setMembresBase(last.membresBase); setConges(last.conges); setNotes(last.notes);
+    setEvenementsPerso(last.evenementsPerso); setAidesPonctuelles(last.aidesPonctuelles);
+    setHistory(prev => prev.slice(1));
+  };
 
   useEffect(() => {
     async function load() {
@@ -101,29 +122,21 @@ export default function App() {
   const checkPin = (e) => { e.preventDefault(); if (pinInput.toLowerCase() === PIN_DIRECTION) { setIsAdmin(true); setModalPinOpen(false); setPinInput(""); } else { alert("Code incorrect"); setPinInput(""); } };
 
   const handleSaveStaff = (e) => {
-    e.preventDefault();
+    e.preventDefault(); pushToHistory();
     const newId = staffForm.id || Date.now().toString();
     const updated = staffForm.id ? membresBase.map(m => String(m.id) === String(staffForm.id) ? staffForm : m) : [...membresBase, { ...staffForm, id: newId }];
     setMembresBase(updated); setModalStaffOpen(false); setStaffForm({ id: null, nom: '', role: 'Palefrenier', total: 25, repos: [] });
   };
 
   const handleSaveConge = (e) => {
-    e.preventDefault();
-    const start = new Date(formData.dateDebut);
-    const end = new Date(formData.dateFin || formData.dateDebut);
+    e.preventDefault(); pushToHistory();
+    const start = new Date(formData.dateDebut); const end = new Date(formData.dateFin || formData.dateDebut);
+    const gId = Math.random().toString(36).substr(2, 9);
     const nouveaux = [];
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      nouveaux.push({ 
-        id: Math.random().toString(36).substr(2, 9), 
-        userId: String(formData.userId), 
-        date: d.toLocaleDateString('en-CA'), 
-        statut: formData.statut, 
-        category: formData.category, 
-        periode: 'jour' 
-      });
+      nouveaux.push({ id: Math.random().toString(36).substr(2, 9), groupId: gId, userId: String(formData.userId), date: d.toLocaleDateString('en-CA'), statut: formData.statut, category: formData.category, periode: 'jour' });
     }
-    setConges([...conges, ...nouveaux]);
-    setModalCongeOpen(false);
+    setConges([...conges, ...nouveaux]); setModalCongeOpen(false);
   };
 
   const congesParDate = useMemo(() => {
@@ -142,7 +155,8 @@ export default function App() {
   }, [selectedDate, membresBase, congesParDate, aidesPonctuelles]);
 
   const calendrierRender = useMemo(() => {
-    return ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"].map((mois, mIdx) => {
+    const moisList = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
+    return moisList.map((mois, mIdx) => {
       const first = new Date(anneeActuelle, mIdx, 1);
       const jours = [];
       let offset = first.getDay() === 0 ? 6 : first.getDay() - 1;
@@ -167,20 +181,20 @@ export default function App() {
               return (
                 <div key={dStr} onClick={() => { setSelectedDate(dStr); setModalChoiceOpen(dStr); }}
                   className={`h-8 rounded flex items-center justify-center relative cursor-pointer overflow-hidden transition-all 
-                  ${isAlerte ? 'bg-red-500 text-white font-bold' : isToday ? 'bg-amber-100 ring-4 ring-amber-500 z-10' : 'bg-[#F4F6F9]'}`}>
-                  {abs.length > 0 && (
+                  ${isAlerte ? 'bg-red-500 text-white font-black' : isToday ? 'bg-amber-100 ring-4 ring-amber-500 z-10' : 'bg-[#F4F6F9]'}`}>
+                  {abs.length > 0 && !isAlerte && (
                     <div className="absolute inset-0 flex flex-col">
                       {[0, 1].map(h => {
-                         const m = abs.filter(a => (h === 0 ? (a.periode === 'matin' || a.periode === 'jour') : (a.periode === 'apres-midi' || a.periode === 'jour')))[0];
-                         if (!m) return <div key={h} className="h-1/2"></div>;
-                         let bg = m.category === 'deplacement' ? "bg-cyan-600" : (m.statut === 'valide' ? "bg-[#1B2A49]" : "bg-transparent");
+                         const match = abs.filter(a => (h === 0 ? (a.periode === 'matin' || a.periode === 'jour') : (a.periode === 'apres-midi' || a.periode === 'jour')))[0];
+                         if (!match) return <div key={h} className="h-1/2"></div>;
+                         let bg = match.category === 'deplacement' ? "bg-cyan-600" : (match.statut === 'valide' ? "bg-[#1B2A49]" : "bg-transparent");
                          return <div key={h} className={`h-1/2 w-full relative ${bg}`}>
-                           {m.statut === 'provisoire' && m.category !== 'deplacement' && <div className="absolute inset-0 opacity-100" style={{background: 'repeating-linear-gradient(45deg, #15803d, #15803d 2px, #1b2a49 2px, #1b2a49 4px)'}}></div>}
+                           {match.statut === 'provisoire' && match.category !== 'deplacement' && <div className="absolute inset-0 opacity-100" style={{background: 'repeating-linear-gradient(45deg, #15803d, #15803d 2px, #1b2a49 2px, #1b2a49 4px)'}}></div>}
                          </div>;
                       })}
                     </div>
                   )}
-                  <span className={`z-10 font-bold text-[11px] ${abs.length > 0 || isAlerte ? 'text-white' : 'text-[#1B2A49]'}`}>{dateObj.getDate()}</span>
+                  <span className={`z-10 font-bold text-[11px] ${isAlerte || (abs.length > 0 && !isAlerte) ? 'text-white' : 'text-[#1B2A49]'}`}>{dateObj.getDate()}</span>
                 </div>
               );
             })}
@@ -215,17 +229,15 @@ export default function App() {
           <div className="p-6 bg-[#141D36] flex flex-col items-center border-b-4 border-[#8DC63F]">
             <img src={LOGO_URL} alt="Logo" className="w-24 h-24 mb-3 bg-white rounded-full p-2 shadow-lg object-contain" />
             <div className="flex items-center gap-2 mb-2">
-               <h2 className="text-[10px] font-extrabold uppercase bg-[#8DC63F] text-[#1B2A49] px-2 py-1 rounded tracking-tighter">Equipes écuries</h2>
+               <h2 className="text-[10px] font-extrabold uppercase bg-[#8DC63F] text-[#1B2A49] px-2 py-1 rounded tracking-tighter">Organisation des équipes écuries</h2>
                <button onClick={handleAuth} className={`p-1 rounded-md ${isAdmin ? 'bg-green-500' : 'bg-red-500'}`}><Unlock size={14}/></button>
             </div>
-            <h1 className="text-xl font-black uppercase mt-1 tracking-tighter leading-none">Poney Club<br/>Presinge</h1>
+            <h1 className="text-xl font-black uppercase mt-1 leading-none tracking-tighter">Poney Club<br/>Presinge</h1>
           </div>
-
           <div className="p-4 space-y-3">
-             {isAdmin && <button onClick={() => setModalCongeOpen(true)} className="w-full bg-[#8DC63F] text-[#1B2A49] font-black py-4 rounded-3xl flex items-center justify-center gap-2 uppercase text-sm shadow-xl hover:scale-105 transition-transform"><Plus size={20}/> Saisir Absence</button>}
+             {isAdmin && <button onClick={() => { setFormData({ ...formData, dateDebut: selectedDate, dateFin: selectedDate }); setModalCongeOpen(true); }} className="w-full bg-[#8DC63F] text-[#1B2A49] font-black py-4 rounded-3xl flex items-center justify-center gap-2 uppercase text-sm shadow-xl hover:scale-105 transition-transform"><Plus size={20}/> Saisir Absence</button>}
              <button onClick={() => setFiltreEmploye(null)} className={`w-full bg-[#8DC63F]/10 text-[#8DC63F] font-bold py-2 rounded-xl text-xs ${!filtreEmploye ? 'ring-1 ring-[#8DC63F]' : ''}`}><FilterX size={14} className="inline mr-1"/> TOUTE L'ÉQUIPE</button>
           </div>
-
           <div className="flex-1 overflow-y-auto p-4 space-y-4 text-left">
              {["Palefrenier", "Apprentie", "Monitrice", "Aide WE", "Aide ponctuel"].map(role => {
                const mm = membresBase.filter(m => m.role === role);
@@ -255,33 +267,40 @@ export default function App() {
         </aside>
 
         <main className="flex-1 flex flex-col relative">
-          <header className="h-44 bg-white border-b flex flex-col md:flex-row items-center justify-between px-6 py-4 gap-4 shadow-sm print:h-auto">
+          <header className="h-44 bg-white border-b flex flex-col md:flex-row items-center justify-between px-6 py-4 gap-4 shadow-sm print:h-auto print:border-none">
             <div className="flex items-center gap-3 print:hidden">
-              <button onClick={() => setAnneeActuelle(a => a-1)} className="p-2 border rounded"><ChevronLeft size={20}/></button>
+              <button onClick={() => setAnneeActuelle(a => a-1)} className="p-2 border rounded"><ChevronLeft/></button>
               <h2 className="text-3xl font-black">{anneeActuelle}</h2>
-              <button onClick={() => setAnneeActuelle(a => a+1)} className="p-2 border rounded"><ChevronRight size={20}/></button>
+              <button onClick={() => setAnneeActuelle(a => a+1)} className="p-2 border rounded"><ChevronRight/></button>
             </div>
-            
             <div className={`flex-1 w-full max-w-2xl min-h-36 rounded-2xl border-2 flex flex-col justify-center items-center p-4 transition-all shadow-sm ${congesParDate[selectedDate]?.length > 2 ? 'bg-red-600 text-white border-red-700' : 'bg-white border-[#D0D7E1]'}`}>
               <h3 className="text-xl font-black uppercase text-center">{new Date(selectedDate).toLocaleDateString('fr-CH', {weekday:'long', day:'numeric', month:'long'})}</h3>
-              {eventsMerged[selectedDate] && <div className="text-red-600 font-black uppercase text-sm mt-1">🚩 {eventsMerged[selectedDate].map(e => e.titre).join(' / ')}</div>}
+              {eventsMerged[selectedDate] && <div className="text-red-600 font-black uppercase text-sm mt-1 print:text-black">🚩 {eventsMerged[selectedDate].map(e => e.titre).join(' / ')}</div>}
               {notes[selectedDate] && <div className="bg-yellow-50 text-[#8B5A2B] italic text-xs px-2 py-0.5 rounded border border-yellow-200 mt-1">"{notes[selectedDate]}"</div>}
-              
               <div className="mt-3 flex items-center gap-4 bg-[#1B2A49] px-6 py-2 rounded-full shadow-lg border border-white/10 print:bg-white print:text-black">
-                 <span className="text-[#8DC63F] font-black text-2xl">{presentsDuJour.total}</span>
+                 <span className="text-[#8DC63F] font-black text-2xl print:text-black">{presentsDuJour.total}</span>
                  <div className="text-[11px] font-bold text-white/90 leading-tight print:text-black">
                     {presentsDuJour.fixe.map(p => p.nom).join(', ')}
-                    {presentsDuJour.aides.length > 0 && <span className="text-cyan-300 italic"> (+ {presentsDuJour.aides.map(p => p.nom).join(', ')})</span>}
+                    {presentsDuJour.aides.length > 0 && <span className="text-cyan-300 italic font-black"> (+ {presentsDuJour.aides.map(p => p.nom).join(', ')})</span>}
                  </div>
               </div>
             </div>
-            <button onClick={() => window.print()} className="p-4 bg-[#1B2A49] text-[#8DC63F] rounded-2xl shadow-xl hover:scale-105 transition-transform print:hidden"><Printer size={24}/></button>
+            <div className="flex items-center gap-2 print:hidden">
+               {history.length > 0 && (
+                 <button onClick={handleUndo} className="p-4 bg-orange-500 text-white rounded-2xl shadow-xl hover:scale-105 flex flex-col items-center justify-center">
+                   <RotateCcw size={20}/>
+                   <span className="text-[8px] font-black uppercase mt-1">Annuler</span>
+                 </button>
+               )}
+               <button onClick={() => window.print()} className="p-4 bg-[#1B2A49] text-[#8DC63F] rounded-2xl shadow-xl hover:scale-105 transition-transform print:hidden"><Printer size={24}/></button>
+            </div>
           </header>
 
           <div className="bg-white/80 backdrop-blur-md px-8 py-2 flex justify-center gap-8 border-b text-[10px] font-black uppercase tracking-wider relative z-10 flex-wrap legend print:hidden">
             <div className="flex items-center gap-1.5"><div className="w-4 h-4 bg-[#1B2A49] rounded-sm shadow-sm"></div> Validé</div>
             <div className="flex items-center gap-1.5"><div className="w-4 h-4 bg-cyan-600 rounded-sm shadow-sm"></div> Déplacement</div>
             <div className="flex items-center gap-1.5"><div className="w-4 h-4 border border-green-700/50" style={{background: 'repeating-linear-gradient(45deg, #15803d, #15803d 2px, #1b2a49 2px, #1b2a49 4px)'}}></div> Provisoire</div>
+            <div className="flex items-center gap-1.5"><div className="w-4 h-1 bg-[#8B5A2B] rounded-full shadow-sm"></div> Concours</div>
             <div className="flex items-center gap-1.5"><div className="w-4 h-1 bg-blue-500 rounded-full shadow-sm"></div> Vacances GE</div>
             <div className="flex items-center gap-1.5"><div className="w-4 h-1 bg-purple-600 rounded-full shadow-sm"></div> Férié</div>
           </div>
@@ -292,35 +311,45 @@ export default function App() {
         </main>
 
         {modalPinOpen && (
-          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[500] p-4">
-            <div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl text-center">
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[500] p-4 text-[#1B2A49]">
+            <div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl text-center border-b-8 border-[#8DC63F]">
+              <Lock className="mx-auto mb-4 text-[#1B2A49]" size={48} />
               <h3 className="font-bold uppercase mb-4 text-lg">Direction</h3>
-              <input autoFocus type="password" placeholder="PIN" className="w-full text-center text-3xl border-2 p-3 rounded-xl mb-4" value={pinInput} onChange={e => setPinInput(e.target.value)} />
-              <div className="flex gap-2"><button onClick={() => setModalPinOpen(false)} className="flex-1 py-3 bg-gray-100 rounded-xl font-bold uppercase">Annuler</button><button onClick={checkPin} className="flex-1 py-3 bg-[#1B2A49] text-white rounded-xl font-bold uppercase">Valider</button></div>
+              <input autoFocus type="password" placeholder="PIN" className="w-full text-center text-3xl border-2 p-3 rounded-xl mb-4 text-[#1B2A49]" value={pinInput} onChange={e => setPinInput(e.target.value)} />
+              <div className="flex gap-2"><button onClick={() => setModalPinOpen(false)} className="flex-1 py-3 bg-gray-100 rounded-xl font-bold uppercase text-xs">Annuler</button><button onClick={checkPin} className="flex-1 py-3 bg-[#1B2A49] text-white rounded-xl font-bold uppercase text-[#8DC63F]">Valider</button></div>
             </div>
           </div>
         )}
 
         {modalChoiceOpen && (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[400] p-4 text-[#1B2A49]">
-            <div className="bg-white rounded-[2rem] w-full max-w-sm p-6 space-y-4 border-t-8 border-[#8DC63F] shadow-2xl relative text-center">
-              <h4 className="font-black border-b pb-4 uppercase text-lg">{new Date(modalChoiceOpen).toLocaleDateString('fr-CH', {weekday:'long', day:'numeric', month:'long'})}</h4>
+            <div className="bg-white rounded-[2rem] w-full max-w-sm p-6 space-y-4 border-t-8 border-[#8DC63F] shadow-2xl relative text-center max-h-[90vh] overflow-y-auto">
+              <h4 className="font-black border-b pb-4 uppercase text-lg tracking-tighter">{new Date(modalChoiceOpen).toLocaleDateString('fr-CH', {weekday:'long', day:'numeric', month:'long'})}</h4>
               <div className="bg-gray-50 p-3 rounded-xl border text-left"><p className="text-[10px] font-black uppercase mb-2 opacity-50 text-center">Aides Ponctuelles :</p><div className="flex flex-wrap justify-center gap-2">
                  {membresBase.filter(m => m.role === "Aide ponctuel").map(m => (
                    <label key={m.id} className="flex items-center gap-1.5 cursor-pointer bg-white px-2 py-1 rounded border shadow-sm group">
-                      <input type="checkbox" className="accent-[#8DC63F]" checked={(aidesPonctuelles[modalChoiceOpen] || []).includes(String(m.id))} onChange={() => {const c = aidesPonctuelles[modalChoiceOpen] || []; const n = c.includes(String(m.id)) ? c.filter(id => id !== String(m.id)) : [...c, String(m.id)]; setAidesPonctuelles({...aidesPonctuelles, [modalChoiceOpen]: n});}} /><span className="text-xs font-bold">{m.nom}</span>
+                      <input type="checkbox" className="accent-[#8DC63F]" checked={(aidesPonctuelles[modalChoiceOpen] || []).includes(String(m.id))} onChange={() => { pushToHistory(); const c = aidesPonctuelles[modalChoiceOpen] || []; const n = c.includes(String(m.id)) ? c.filter(id => id !== String(m.id)) : [...c, String(m.id)]; setAidesPonctuelles({...aidesPonctuelles, [modalChoiceOpen]: n});}} /><span className="text-xs font-bold">{m.nom}</span>
                    </label>
                  ))}
               </div></div>
               {isAdmin ? (
                 <div className="space-y-3">
-                    <button onClick={() => { setFormData({ ...formData, dateDebut: modalChoiceOpen, dateFin: modalChoiceOpen, userId: membresBase[0]?.id || '' }); setModalCongeOpen(true); setModalChoiceOpen(null); }} className="w-full py-5 bg-[#8DC63F] text-[#1B2A49] font-black rounded-2xl uppercase text-xs">Saisir Absence</button>
+                    <button onClick={() => { setFormData({ ...formData, dateDebut: modalChoiceOpen, dateFin: modalChoiceOpen, userId: membresBase[0]?.id || '' }); setModalCongeOpen(true); setModalChoiceOpen(null); }} className="w-full py-5 bg-[#8DC63F] text-[#1B2A49] font-black rounded-2xl uppercase text-xs shadow-md">Saisir Absence</button>
                     <button onClick={() => { setEvtForm({ dateDebut: modalChoiceOpen, dateFin: modalChoiceOpen, titre: '', type: 'concours_oui' }); setModalEvtOpen(true); setModalChoiceOpen(null); }} className="w-full py-4 bg-[#1B2A49] text-white font-black rounded-2xl uppercase text-xs">Événement Club</button>
                     <button onClick={() => { setNoteText(notes[modalChoiceOpen] || ""); setModalNoteOpen(true); setModalChoiceOpen(null); }} className="w-full py-4 bg-yellow-400 text-[#1B2A49] font-black rounded-2xl uppercase text-xs">Note (Post-it)</button>
-                    <div className="pt-4 max-h-40 overflow-y-auto space-y-2">{(congesParDate[modalChoiceOpen] || []).map(a => (<button key={a.id} onClick={() => { if(confirm("Supprimer ?")) setConges(conges.filter(x => x.id !== a.id)); setModalChoiceOpen(null); }} className="w-full bg-red-50 text-red-700 text-[10px] py-3 rounded-xl border font-black uppercase tracking-widest"><Trash2 size={12} className="inline mr-1"/> {membresBase?.find(u=>String(u.id)===String(a.userId))?.nom}</button>))}</div>
+                    <div className="pt-4 max-h-40 overflow-y-auto space-y-2 border-t mt-4 text-center">
+                      {(congesParDate[modalChoiceOpen] || []).map(a => (
+                         <div key={a.id} className="flex gap-1 items-center">
+                            <button onClick={() => { if(confirm("Supprimer toute la période ?")) { pushToHistory(); setConges(conges.filter(x => x.groupId !== a.groupId)); setModalChoiceOpen(null); } }} className="flex-1 bg-red-50 text-red-700 text-[10px] py-2.5 rounded-xl border font-black uppercase tracking-widest"><Trash2 size={12} className="inline mr-1"/> {membresBase?.find(u=>String(u.id)===String(a.userId))?.nom}</button>
+                            {a.statut === 'provisoire' && (
+                              <button onClick={() => { pushToHistory(); setConges(conges.map(c => c.groupId === a.groupId ? {...c, statut:'valide'} : c)); setModalChoiceOpen(null); }} className="bg-green-600 text-white text-[10px] px-3 py-2.5 rounded-xl font-black uppercase shadow-sm">Valider Période</button>
+                            )}
+                         </div>
+                      ))}
+                    </div>
                 </div>
               ) : (
-                <button onClick={() => setModalPinOpen(true)} className="w-full py-3 bg-[#1B2A49] text-white rounded-xl font-bold uppercase text-[10px]">Déverrouiller</button>
+                <button onClick={() => setModalPinOpen(true)} className="w-full py-3 bg-[#1B2A49] text-white rounded-xl font-bold uppercase text-[10px] shadow-lg">Déverrouiller</button>
               )}
               <button onClick={() => setModalChoiceOpen(null)} className="w-full py-2 text-gray-400 font-black uppercase text-[10px]">Fermer</button>
             </div>
@@ -329,11 +358,11 @@ export default function App() {
 
         {modalStaffOpen && (
           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[500] p-4 text-[#1B2A49]">
-            <div className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl border-b-8 border-[#8DC63F]">
+            <div className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl border-b-8 border-[#8DC63F] max-h-[90vh] overflow-y-auto">
               <div className="bg-[#1B2A49] p-5 text-white flex justify-between items-center uppercase font-bold tracking-widest text-sm">Paramètres Équipe<X className="cursor-pointer" onClick={() => setModalStaffOpen(false)}/></div>
               <div className="flex flex-col md:flex-row p-6 gap-6 text-left">
-                 <form onSubmit={handleSaveStaff} className="flex-1 space-y-4"><input type="text" className="w-full border-2 p-4 rounded-2xl font-bold outline-none" value={staffForm.nom} onChange={e => setStaffForm({...staffForm, nom: e.target.value})} required placeholder="Nom"/><select className="w-full border-2 p-4 rounded-2xl font-black bg-white outline-none" value={staffForm.role} onChange={e => setStaffForm({...staffForm, role: e.target.value})}>{["Palefrenier", "Apprentie", "Stagiaire", "Monitrice", "Aide WE", "Aide ponctuel"].map(r => <option key={r} value={r}>{r}</option>)}</select><div className="space-y-2 text-[10px] font-black uppercase text-gray-400">Repos<div className="grid grid-cols-4 gap-1">{JOURS_SEMAINE.map(j => <button key={j} type="button" onClick={() => {const c = staffForm.repos || []; setStaffForm({...staffForm, repos: c.includes(j) ? c.filter(d => d !== j) : [...c, j]});}} className={`py-2 rounded-xl border-2 ${staffForm.repos?.includes(j) ? 'bg-[#8DC63F] border-[#8DC63F] text-[#1B2A49]' : 'bg-white text-gray-300'}`}>{j.substring(0,3)}</button>)}</div></div><button type="submit" className="w-full bg-[#1B2A49] text-white py-4 rounded-xl font-black uppercase">Enregistrer</button></form>
-                 <div className="p-8 md:w-1/2 overflow-y-auto bg-white">{membresBase.map(m => (<div key={m.id} className="flex justify-between items-center p-3 border rounded-xl mb-2 font-black text-sm">{m.nom}<div className="flex gap-2"><button onClick={() => setStaffForm(m)} className="text-blue-600 p-2"><Edit size={16}/></button><button onClick={() => { if(confirm("Supprimer ?")) setMembresBase(membresBase.filter(x => String(x.id) !== String(m.id))) }} className="text-red-600 p-2"><Trash2 size={16}/></button></div></div>))}</div>
+                 <form onSubmit={handleSaveStaff} className="flex-1 space-y-4 text-left"><input type="text" className="w-full border-2 p-4 rounded-2xl font-bold outline-none" value={staffForm.nom} onChange={e => setStaffForm({...staffForm, nom: e.target.value})} required placeholder="Nom"/><select className="w-full border-2 p-4 rounded-2xl font-black bg-white outline-none" value={staffForm.role} onChange={e => setStaffForm({...staffForm, role: e.target.value})}>{["Palefrenier", "Apprentie", "Stagiaire", "Monitrice", "Aide WE", "Aide ponctuel"].map(r => <option key={r} value={r}>{r}</option>)}</select><div className="space-y-2 text-[10px] font-black uppercase text-gray-400">Repos<div className="grid grid-cols-4 gap-1">{JOURS_SEMAINE.map(j => <button key={j} type="button" onClick={() => {const c = staffForm.repos || []; setStaffForm({...staffForm, repos: c.includes(j) ? c.filter(d => d !== j) : [...c, j]});}} className={`py-2 rounded-xl border-2 ${staffForm.repos?.includes(j) ? 'bg-[#8DC63F] border-[#8DC63F] text-[#1B2A49]' : 'bg-white text-gray-300'}`}>{j.substring(0,3)}</button>)}</div></div><button type="submit" className="w-full bg-[#1B2A49] text-white py-4 rounded-xl font-black uppercase">Enregistrer</button></form>
+                 <div className="p-8 md:w-1/2 overflow-y-auto bg-white">{membresBase.map(m => (<div key={m.id} className="flex justify-between items-center p-3 border rounded-xl mb-2 font-black text-sm text-left">{m.nom}<div className="flex gap-2"><button onClick={() => setStaffForm(m)} className="text-blue-600 p-2"><Edit size={16}/></button><button onClick={() => { if(confirm("Supprimer ?")) { pushToHistory(); setMembresBase(membresBase.filter(x => String(x.id) !== String(m.id))); } }} className="text-red-600 p-2"><Trash2 size={16}/></button></div></div>))}</div>
               </div>
             </div>
           </div>
@@ -343,45 +372,23 @@ export default function App() {
           <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[600] p-4 text-[#1B2A49]">
             <div className="bg-white rounded-[2rem] w-full max-w-md overflow-hidden shadow-2xl border-2 border-[#1B2A49]">
               <div className="p-5 bg-[#1B2A49] text-white flex justify-between items-center font-black uppercase text-sm">Enregistrement<X className="cursor-pointer" onClick={() => setModalCongeOpen(false)}/></div>
-              <form onSubmit={handleSaveConge} className="p-8 space-y-5 text-left">
-                <select className="w-full border-2 p-4 rounded-2xl font-black outline-none" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}><option value="conge">🏝️ Congé (Décompté)</option><option value="deplacement">✈️ Déplacement (Maintenu)</option></select>
-                <div className="grid grid-cols-2 gap-3">
-                   <input type="date" className="border-2 p-4 rounded-2xl font-bold outline-none" value={formData.dateDebut} onChange={e => setFormData({...formData, dateDebut: e.target.value})} required/>
-                   <input type="date" className="border-2 p-4 rounded-2xl font-bold outline-none" value={formData.dateFin} onChange={e => setFormData({...formData, dateFin: e.target.value})}/>
-                </div>
-                <select className="w-full border-2 p-4 rounded-2xl font-black outline-none" value={formData.userId} onChange={e => setFormData({...formData, userId: e.target.value})} required>
-                  <option value="">-- Choisir employé --</option>
-                  {membresBase.map(m => <option key={m.id} value={m.id}>{m.nom}</option>)}
-                </select>
-                <div className="flex gap-4 p-4 bg-gray-50 rounded-2xl justify-around border-2 border-dashed border-gray-200 text-[10px] font-black uppercase shadow-inner">
-                    <label className="cursor-pointer font-black text-blue-900"><input type="radio" checked={formData.statut === 'provisoire'} onChange={() => setFormData({...formData, statut:'provisoire'})}/> Provisoire</label>
-                    <label className="cursor-pointer text-green-700 font-black"><input type="radio" checked={formData.statut === 'valide'} onChange={() => setFormData({...formData, statut:'valide'})}/> Validé</label>
-                </div>
-                <button type="submit" className="w-full bg-[#1B2A49] text-white py-5 rounded-2xl font-black uppercase text-sm shadow-xl">Confirmer</button>
-              </form>
+              <form onSubmit={handleSaveConge} className="p-8 space-y-5 text-left"><select className="w-full border-2 p-4 rounded-2xl font-black outline-none" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}><option value="conge">🏝️ Congé (Décompté)</option><option value="deplacement">✈️ Déplacement (Maintenu)</option></select><div className="grid grid-cols-2 gap-3"><input type="date" className="border-2 p-4 rounded-2xl font-bold outline-none" value={formData.dateDebut} onChange={e => setFormData({...formData, dateDebut: e.target.value})} required/><input type="date" className="border-2 p-4 rounded-2xl font-bold outline-none" value={formData.dateFin} onChange={e => setFormData({...formData, dateFin: e.target.value})}/></div><select className="w-full border-2 p-4 rounded-2xl font-black outline-none" value={formData.userId} onChange={e => setFormData({...formData, userId: e.target.value})} required><option value="">-- Choisir employé --</option>{membresBase.map(m => <option key={m.id} value={m.id}>{m.nom}</option>)}</select><div className="flex gap-4 p-4 bg-gray-50 rounded-2xl justify-around border-2 border-dashed border-gray-200 text-[10px] font-black uppercase shadow-inner"><label className="cursor-pointer font-black text-blue-900"><input type="radio" checked={formData.statut === 'provisoire'} onChange={() => setFormData({...formData, statut:'provisoire'})}/> Provisoire</label><label className="cursor-pointer text-green-700 font-black"><input type="radio" checked={formData.statut === 'valide'} onChange={() => setFormData({...formData, statut:'valide'})}/> Validé</label></div><button type="submit" className="w-full bg-[#1B2A49] text-white py-5 rounded-2xl font-black uppercase text-sm shadow-xl">Confirmer</button></form>
             </div>
           </div>
         )}
 
         {modalEvtOpen && (
           <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[600] p-4 text-[#1B2A49]">
-            <div className="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl text-center">
-              <h3 className="font-black uppercase mb-4 text-[#1B2A49]">Événement</h3>
-              <form onSubmit={(e) => {
-                e.preventDefault();
-                const nx = { ...evenementsPerso };
-                const d = selectedDate;
-                const newE = { id: Date.now(), type: evtForm.type, titre: evtForm.titre };
-                nx[d] = nx[d] ? [...nx[d], newE] : [newE];
-                setEvenementsPerso(nx);
-                setModalEvtOpen(false);
-              }} className="space-y-4">
-                 <input type="text" className="w-full border-2 p-4 rounded-2xl font-black outline-none" value={evtForm.titre} onChange={e => setEvtForm({...evtForm, titre: e.target.value})} required placeholder="Titre (ex: Maréchal)"/>
+            <div className="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl text-center relative">
+              <X className="absolute top-4 right-4 cursor-pointer text-gray-400" onClick={() => setModalEvtOpen(false)}/>
+              <h3 className="font-black uppercase mb-4 text-[#1B2A49]">Événement Club</h3>
+              <form onSubmit={(e) => { e.preventDefault(); pushToHistory(); const nx = { ...evenementsPerso }; nx[modalChoiceOpen] = [...(nx[modalChoiceOpen] || []), { id: Date.now(), type: evtForm.type, titre: evtForm.titre }]; setEvenementsPerso(nx); setModalEvtOpen(false); }} className="space-y-4">
+                 <input type="text" className="w-full border-2 p-4 rounded-2xl font-black outline-none text-[#1B2A49]" value={evtForm.titre} onChange={e => setEvtForm({...evtForm, titre: e.target.value})} required placeholder="Titre (ex: Maréchal)"/>
                  <select className="w-full border-2 p-4 rounded-2xl font-black bg-white" value={evtForm.type} onChange={e => setEvtForm({...evtForm, type: e.target.value})}>
                     <option value="concours_oui">🏇 Événement</option>
                     <option value="jour_ferie">🎉 Spécial</option>
                  </select>
-                 <button type="submit" className="w-full bg-[#1B2A49] text-white py-4 rounded-xl font-black uppercase">Valider</button>
+                 <button type="submit" className="w-full bg-[#1B2A49] text-[#8DC63F] py-4 rounded-xl font-black uppercase">Valider</button>
               </form>
             </div>
           </div>
@@ -391,11 +398,10 @@ export default function App() {
           <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[600] p-4 text-[#1B2A49]">
              <div className="bg-white rounded-[2rem] w-full max-w-sm overflow-hidden border-4 border-yellow-400 shadow-2xl text-center">
                 <div className="p-4 bg-yellow-400 font-black flex justify-between uppercase italic text-xs text-[#1B2A49]"><span>Note du jour</span><X className="cursor-pointer" onClick={() => setModalNoteOpen(false)}/></div>
-                <form onSubmit={(e) => { e.preventDefault(); const nx = { ...notes }; if (!noteText.trim()) delete nx[selectedDate]; else nx[selectedDate] = noteText; setNotes(nx); setModalNoteOpen(false); }} className="p-6 space-y-4"><textarea autoFocus className="w-full border-2 border-yellow-100 p-5 rounded-2xl bg-yellow-50 outline-none h-40 font-bold shadow-inner text-[#1B2A49]" value={noteText} onChange={e => setNoteText(e.target.value)} placeholder="Message..."/><button type="submit" className="w-full bg-yellow-400 text-[#1B2A49] font-black py-4 rounded-xl shadow-lg uppercase text-xs">Valider</button></form>
+                <form onSubmit={(e) => { e.preventDefault(); pushToHistory(); const nx = { ...notes }; if (!noteText.trim()) delete nx[modalChoiceOpen]; else nx[modalChoiceOpen] = noteText; setNotes(nx); setModalNoteOpen(false); }} className="p-6 space-y-4"><textarea autoFocus className="w-full border-2 border-yellow-100 p-5 rounded-2xl bg-yellow-50 outline-none h-40 font-bold shadow-inner text-[#1B2A49]" value={noteText} onChange={e => setNoteText(e.target.value)} placeholder="Message..."/><button type="submit" className="w-full bg-yellow-400 text-[#1B2A49] font-black py-4 rounded-xl shadow-lg uppercase text-xs">Valider</button></form>
              </div>
           </div>
         )}
-
       </div>
     </div>
   );
