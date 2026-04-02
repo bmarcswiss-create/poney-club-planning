@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  Calendar as CalendarIcon, Trash2, X, Plus, Settings, Edit, FilterX, Lock, Unlock, Printer, ChevronLeft, ChevronRight, StickyNote, RotateCcw, CheckCircle2, AlertTriangle 
+  Calendar as CalendarIcon, Trash2, X, Plus, Settings, Edit, FilterX, Lock, Unlock, Printer, ChevronLeft, ChevronRight, StickyNote, RotateCcw, CheckCircle2 
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
@@ -13,9 +13,8 @@ const PIN_DIRECTION = "poney";
 const JOURS_SEMAINE = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
 const LOGO_URL = "https://lnwvlyswsmtafyoepovq.supabase.co/storage/v1/object/public/logo/logo.png";
 
-// --- DATES OFFICIELLES GENEVE (Fériés & Vacances) ---
+// --- DATES OFFICIELLES GENEVE 2026-2027 ---
 const OFFICIAL_EVENTS = {
-  // 2026
   '2026-01-01': [{ titre: 'Nouvel An', type: 'jour_ferie' }],
   '2026-04-03': [{ titre: 'Vendredi-Saint', type: 'jour_ferie' }],
   '2026-04-06': [{ titre: 'Lundi de Pâques', type: 'jour_ferie' }],
@@ -29,7 +28,7 @@ const OFFICIAL_EVENTS = {
   '2026-02-23': [{ titre: 'Relâches', type: 'vacances_ge' }], '2026-02-24': [{ titre: 'Relâches', type: 'vacances_ge' }], '2026-02-25': [{ titre: 'Relâches', type: 'vacances_ge' }], '2026-02-26': [{ titre: 'Relâches', type: 'vacances_ge' }], '2026-02-27': [{ titre: 'Relâches', type: 'vacances_ge' }],
   '2026-05-15': [{ titre: 'Pont Ascension', type: 'vacances_ge' }],
   '2026-06-29': [{ titre: 'Vacances été', type: 'vacances_ge' }],
-  '2026-10-19': [{ titre: 'Automne', type: 'vacances_ge' }], '2026-10-20': [{ titre: 'Automne', type: 'vacances_ge' }], '2026-10-21': [{ titre: 'Automne', type: 'vacances_ge' }], '2026-10-22': [{ titre: 'Automne', type: 'vacances_ge' }], '2026-10-23': [{ titre: 'Automne', type: 'vacances_ge' }],
+  '2026-10-19': [{ titre: 'Automne', type: 'vacances_ge' }], '2026-10-23': [{ titre: 'Automne', type: 'vacances_ge' }],
   // 2027
   '2027-01-01': [{ titre: 'Nouvel An', type: 'jour_ferie' }],
   '2027-03-26': [{ titre: 'Vendredi-Saint', type: 'jour_ferie' }],
@@ -42,9 +41,9 @@ const OFFICIAL_EVENTS = {
 };
 
 export default function App() {
-  const getTodayStr = () => new Date().toLocaleDateString('en-CA');
-  const todayStr = getTodayStr();
-
+  // Format YYYY-MM-DD robuste
+  const todayStr = new Date().toLocaleDateString('en-CA');
+  
   const [isLoaded, setIsLoaded] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [anneeActuelle, setAnneeActuelle] = useState(2026);
@@ -57,6 +56,7 @@ export default function App() {
   const [filtreEmploye, setFiltreEmploye] = useState(null);
   const [history, setHistory] = useState([]);
 
+  // Modales
   const [modalCongeOpen, setModalCongeOpen] = useState(false);
   const [modalStaffOpen, setModalStaffOpen] = useState(false);
   const [modalChoiceOpen, setModalChoiceOpen] = useState(null);
@@ -66,13 +66,13 @@ export default function App() {
   
   const [formData, setFormData] = useState({ userId: '', dateDebut: todayStr, dateFin: todayStr, periode: 'jour', statut: 'provisoire', category: 'conge' });
   const [staffForm, setStaffForm] = useState({ id: null, nom: '', role: 'Palefrenier', total: 25, repos: [] });
-  const [evtForm, setEvtForm] = useState({ dateDebut: '', dateFin: '', titre: '', type: 'concours_oui' });
+  const [evtForm, setEvtForm] = useState({ dateDebut: todayStr, dateFin: todayStr, titre: '', type: 'concours_oui' });
   const [noteText, setNoteText] = useState("");
   const [pinInput, setPinInput] = useState("");
 
   const eventsMerged = useMemo(() => {
     const result = { ...OFFICIAL_EVENTS };
-    Object.keys(evenementsPerso).forEach(d => {
+    Object.keys(evenementsPerso || {}).forEach(d => {
         if (d.startsWith(anneeActuelle.toString())) {
             result[d] = [...(result[d] || []), ...(evenementsPerso[d] || [])];
         }
@@ -93,6 +93,7 @@ export default function App() {
     setHistory(prev => prev.slice(1));
   };
 
+  // Chargement Supabase
   useEffect(() => {
     async function load() {
       try {
@@ -103,20 +104,22 @@ export default function App() {
           setConges(map.poney_conges || []);
           setNotes(map.poney_notes || {});
           setEvenementsPerso(map.poney_evts_perso || {});
-          setManualPresence(map.poney_manual_pres_final_v10 || {});
+          setManualPresence(map.poney_manual_pres_final_v20 || {});
           if (map.poney_annee) setAnneeActuelle(Number(map.poney_annee));
         }
-      } catch (e) { console.error(e); } setIsLoaded(true);
+      } catch (e) { console.error(e); }
+      setIsLoaded(true);
     } load();
   }, []);
 
+  // Sauvegarde Automatique
   useEffect(() => {
     if (!isLoaded || membresBase.length === 0) return;
     const t = setTimeout(() => {
       supabase.from('app_state').upsert([
         { id: 'poney_equipe', data: membresBase }, { id: 'poney_conges', data: conges },
         { id: 'poney_notes', data: notes }, { id: 'poney_evts_perso', data: evenementsPerso },
-        { id: 'poney_manual_pres_final_v10', data: manualPresence }, { id: 'poney_annee', data: anneeActuelle.toString() }
+        { id: 'poney_manual_pres_final_v20', data: manualPresence }, { id: 'poney_annee', data: anneeActuelle.toString() }
       ]);
     }, 1500); return () => clearTimeout(t);
   }, [membresBase, conges, notes, evenementsPerso, manualPresence, isLoaded, anneeActuelle]);
@@ -130,15 +133,15 @@ export default function App() {
   }, [conges]);
 
   const getDayPresence = (dateStr) => {
-    if (!dateStr || membresBase.length === 0) return { total: 0, scheduled: [], ponctuel: [] };
+    if (!dateStr || !membresBase) return { total: 0, scheduled: [], ponctuel: [] };
     const d = new Date(dateStr);
     const nomJour = JOURS_SEMAINE[d.getDay() === 0 ? 6 : d.getDay() - 1];
-    const absentsIds = new Set((congesParDate[dateStr] || []).map(a => String(a.userId)));
+    const absIds = new Set((congesParDate[dateStr] || []).map(a => String(a.userId)));
     let scheduled = []; let ponctuel = [];
     membresBase.forEach(m => {
         const mId = String(m.id);
         const override = manualPresence[dateStr]?.[mId];
-        const isNormallyHere = !(Array.isArray(m.repos) && m.repos.includes(nomJour)) && !absentsIds.has(mId) && m.role !== "Aide ponctuel";
+        const isNormallyHere = !(Array.isArray(m.repos) && m.repos.includes(nomJour)) && !absIds.has(mId) && m.role !== "Aide ponctuel";
         if (override === true) { if (isNormallyHere) scheduled.push(m); else ponctuel.push(m); }
         else if (override === false) { }
         else { if (isNormallyHere) scheduled.push(m); }
@@ -164,8 +167,8 @@ export default function App() {
             {jours.map((dateObj, idx) => {
               if (!dateObj) return <div key={idx} className="h-8"></div>;
               const dStr = dateObj.toLocaleDateString('en-CA');
-              const presents = getDayPresence(dStr);
               const isToday = dStr === todayStr;
+              const presents = getDayPresence(dStr);
               const isAlerte = presents.total < 4;
               const absRaw = congesParDate[dStr] || [];
               const abs = filtreEmploye ? absRaw.filter(a => String(a.userId) === String(filtreEmploye)) : absRaw;
@@ -198,28 +201,45 @@ export default function App() {
   }, [anneeActuelle, congesParDate, filtreEmploye, membresBase, eventsMerged, manualPresence, todayStr]);
 
   const presentsCurrent = useMemo(() => getDayPresence(selectedDate), [selectedDate, membresBase, congesParDate, manualPresence]);
-  const isSelectedToday = selectedDate === todayStr;
 
-  if (!isLoaded) return <div className="h-screen flex items-center justify-center font-bold">PCP Loading...</div>;
+  if (!isLoaded) return <div className="h-screen flex items-center justify-center font-bold">Chargement PCP...</div>;
 
   return (
     <div className="min-h-screen bg-[#F0F4F8] text-[#1B2A49] font-sans relative overflow-hidden">
+      
+      <style>{`
+        @media (max-width: 1024px) {
+          .flex-layout { flex-direction: column !important; height: auto !important; overflow-y: auto !important; }
+          aside { width: 100% !important; height: auto !important; position: relative !important; }
+          main { height: auto !important; }
+        }
+        @media print {
+          @page { size: landscape; margin: 0.5cm; }
+          body { background: white !important; }
+          aside, header, .legend, .print-hide { display: none !important; }
+          main { display: block !important; width: 100% !important; }
+          .grid { display: grid !important; grid-template-columns: repeat(4, 1fr) !important; gap: 5px !important; }
+        }
+      `}</style>
+
       <div className="flex h-screen overflow-hidden print:block flex-layout">
         
         {/* SIDEBAR */}
         <aside className="w-80 bg-[#1B2A49] flex flex-col shrink-0 shadow-xl text-white text-center print:hidden">
           <div className="p-6 bg-[#141D36] flex flex-col items-center border-b-4 border-[#8DC63F]">
-            <img src={LOGO_URL} alt="Logo" className="w-24 h-24 mb-3 bg-white rounded-full p-1 shadow-lg object-contain" />
+            <img src={LOGO_URL} alt="Logo" className="w-24 h-24 mb-3 bg-white rounded-full p-1 shadow-lg" />
             <div className="flex items-center gap-2 mb-2">
                <h2 className="text-[10px] font-extrabold uppercase bg-[#8DC63F] text-[#1B2A49] px-2 py-1 rounded tracking-tighter">Organisation des équipes</h2>
                <button onClick={handleAuth} className={`p-1 rounded ${isAdmin ? 'bg-green-500' : 'bg-red-500'}`}><Unlock size={14}/></button>
             </div>
-            <h1 className="text-xl font-black uppercase mt-1 leading-none tracking-tighter">Poney Club<br/>Presinge</h1>
+            <h1 className="text-xl font-bold uppercase mt-1 leading-none tracking-tighter">Poney Club<br/>Presinge</h1>
           </div>
+
           <div className="p-4 space-y-3">
-             {isAdmin && <button onClick={() => { setFormData({ ...formData, dateDebut: todayStr, dateFin: todayStr }); setModalCongeOpen(true); }} className="w-full bg-[#8DC63F] text-[#1B2A49] font-black py-4 rounded-3xl flex items-center justify-center gap-2 uppercase text-sm shadow-xl hover:scale-105 transition-transform"><Plus size={20}/> Saisir Absence</button>}
+             {isAdmin && <button onClick={() => { setFormData({ ...formData, dateDebut: selectedDate, dateFin: selectedDate }); setModalCongeOpen(true); }} className="w-full bg-[#8DC63F] text-[#1B2A49] font-black py-4 rounded-3xl flex items-center justify-center gap-2 uppercase text-sm shadow-xl hover:scale-105 transition-transform"><Plus size={20}/> Saisir Absence</button>}
              <button onClick={() => setFiltreEmploye(null)} className={`w-full bg-[#8DC63F]/10 text-[#8DC63F] font-bold py-2 rounded-xl text-xs ${!filtreEmploye ? 'ring-1 ring-[#8DC63F]' : ''}`}><FilterX size={14} className="inline mr-1"/> TOUTE L'ÉQUIPE</button>
           </div>
+
           <div className="flex-1 overflow-y-auto p-4 space-y-4 text-left">
              {["Palefrenier", "Apprentie", "Monitrice", "Aide WE", "Aide ponctuel"].map(role => {
                const mm = membresBase.filter(m => m.role === role);
@@ -249,6 +269,7 @@ export default function App() {
         </aside>
 
         <main className="flex-1 flex flex-col relative">
+          {/* HEADER DYNAMIQUE */}
           <header className="h-44 bg-white border-b flex flex-col md:flex-row items-center justify-between px-6 py-4 gap-4 shadow-sm print:h-auto">
             <div className="flex items-center gap-3 print:hidden">
               <button onClick={() => setAnneeActuelle(a => a-1)} className="p-2 border rounded"><ChevronLeft/></button>
@@ -257,10 +278,11 @@ export default function App() {
             </div>
             
             <div className={`flex-1 w-full max-w-2xl min-h-36 rounded-2xl border-4 flex flex-col justify-center items-center p-4 transition-all shadow-sm 
-                ${isSelectedToday ? 'border-orange-500' : 'border-[#D0D7E1]'} 
+                ${selectedDate === todayStr ? 'border-orange-500' : 'border-[#D0D7E1]'} 
                 ${presentsCurrent.total < 4 ? 'bg-red-600 text-white animate-pulse' : 'bg-white'}`}>
               <h3 className="text-xl font-black uppercase text-center">{new Date(selectedDate).toLocaleDateString('fr-CH', {weekday:'long', day:'numeric', month:'long'})}</h3>
               {eventsMerged[selectedDate] && <div className="text-black font-black uppercase text-sm mt-1 print:text-black">🚩 {eventsMerged[selectedDate].map(e => e.titre).join(' / ')}</div>}
+              {notes[selectedDate] && <div className="bg-yellow-50 text-[#8B5A2B] italic text-xs px-2 py-0.5 rounded border border-yellow-200 mt-1">"{notes[selectedDate]}"</div>}
               
               <div className="mt-3 flex items-center gap-4 bg-[#1B2A49] px-6 py-2 rounded-full shadow-lg border border-white/10 print:bg-white print:text-black">
                  <span className="text-[#8DC63F] font-black text-2xl">{presentsCurrent.total}</span>
@@ -280,13 +302,13 @@ export default function App() {
             </div>
           </header>
 
-          {/* LEGENDE EXHAUSTIVE */}
+          {/* LEGENDE EXPLICATIVE */}
           <div className="bg-white/95 backdrop-blur-md px-8 py-2 flex justify-center gap-6 border-b text-[9px] font-black uppercase tracking-wider relative z-10 flex-wrap legend print:hidden">
-            <div className="flex items-center gap-1.5"><div className="w-4 h-4 bg-red-600 rounded-sm"></div> Alerte (<span className="text-red-600 font-black">{"<"} 4</span>)</div>
+            <div className="flex items-center gap-1.5"><div className="w-4 h-4 bg-red-600 rounded-sm"></div> Alerte (<span className="text-red-600">{"<"} 4</span>)</div>
             <div className="flex items-center gap-1.5"><div className="w-4 h-4 border-2 border-orange-500 bg-amber-50 rounded-sm"></div> Aujourd'hui</div>
-            <div className="flex items-center gap-1.5"><div className="w-4 h-4 bg-[#1B2A49] rounded-sm"></div> Validé</div>
+            <div className="flex items-center gap-1.5"><div className="w-4 h-4 bg-[#1B2A49] rounded-sm shadow-sm"></div> Validé</div>
             <div className="flex items-center gap-1.5"><div className="w-4 h-4 border border-green-700/50" style={{background: 'repeating-linear-gradient(45deg, #15803d, #15803d 2px, #1b2a49 2px, #1b2a49 4px)'}}></div> Provisoire</div>
-            <div className="flex items-center gap-1.5 text-cyan-600 italic"><CheckCircle2 size={12}/> (+ Nom) Renfort ponctuel</div>
+            <div className="flex items-center gap-1.5 text-cyan-600 italic font-black uppercase"><CheckCircle2 size={12}/> (+ Nom) Renfort ponctuel</div>
             <div className="flex items-center gap-1.5"><div className="w-3 h-1 bg-blue-500 rounded-full"></div> Vacances GE</div>
             <div className="flex items-center gap-1.5"><div className="w-3 h-1 bg-purple-600 rounded-full"></div> Férié</div>
           </div>
@@ -303,17 +325,17 @@ export default function App() {
               <Lock className="mx-auto mb-4 text-[#1B2A49]" size={48} />
               <h3 className="font-bold uppercase mb-4 text-lg">Direction</h3>
               <input autoFocus type="password" placeholder="PIN" className="w-full text-center text-3xl border-2 p-3 rounded-xl mb-4 text-[#1B2A49]" value={pinInput} onChange={e => setPinInput(e.target.value)} />
-              <div className="flex gap-2"><button onClick={() => setModalPinOpen(false)} className="flex-1 py-3 bg-gray-100 rounded-xl font-bold uppercase text-xs">Annuler</button><button onClick={checkPin} className="flex-1 py-3 bg-[#1B2A49] text-white rounded-xl font-bold uppercase text-xs">Valider</button></div>
+              <div className="flex gap-2"><button onClick={() => setModalPinOpen(false)} className="flex-1 py-3 bg-gray-100 rounded-xl font-bold uppercase text-xs">Annuler</button><button onClick={checkPin} className="flex-1 py-3 bg-[#1B2A49] text-white rounded-xl font-bold uppercase text-[#8DC63F]">Valider</button></div>
             </div>
           </div>
         )}
 
-        {/* MODALE JOUR SELECTIONNÉ (SURCHARGE) */}
+        {/* MODALE JOUR SELECTIONNÉ */}
         {modalChoiceOpen && (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[400] p-4 text-[#1B2A49]">
             <div className="bg-white rounded-[2rem] w-full max-w-sm p-6 space-y-4 border-t-8 border-[#8DC63F] shadow-2xl relative text-center max-h-[90vh] overflow-y-auto">
-              <h4 className="font-black border-b pb-4 uppercase text-lg tracking-tighter">{new Date(modalChoiceOpen).toLocaleDateString('fr-CH', {weekday:'long', day:'numeric', month:'long'})}</h4>
-              <div className="bg-gray-50 p-3 rounded-xl border text-left"><p className="text-[10px] font-black uppercase mb-2 opacity-50 text-center">Présence ponctuelle :</p>
+              <h4 className="font-black border-b pb-4 uppercase text-lg">{new Date(modalChoiceOpen).toLocaleDateString('fr-CH', {weekday:'long', day:'numeric', month:'long'})}</h4>
+              <div className="bg-gray-50 p-3 rounded-xl border text-left text-[#1B2A49]"><p className="text-[10px] font-black uppercase mb-2 opacity-50 text-center">Présence ponctuelle :</p>
               <div className="grid grid-cols-2 gap-2">
                  {membresBase.map(m => {
                     const mId = String(m.id);
@@ -336,34 +358,42 @@ export default function App() {
           </div>
         )}
 
-        {/* RESTE DES MODALES (Staff, Absence, Evt, Note - Sécurisées) */}
+        {/* MODALE STAFF */}
         {modalStaffOpen && (
           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[500] p-4 text-[#1B2A49]">
-            <div className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl border-b-8 border-[#8DC63F] max-h-[90vh] overflow-y-auto text-left">
+            <div className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl border-b-8 border-[#8DC63F] max-h-[90vh] overflow-y-auto">
               <div className="bg-[#1B2A49] p-5 text-white flex justify-between items-center uppercase font-bold tracking-widest text-sm">Paramètres Équipe<X className="cursor-pointer" onClick={() => setModalStaffOpen(false)}/></div>
-              <div className="flex flex-col md:flex-row p-6 gap-6">
-                 <form onSubmit={handleSaveStaff} className="flex-1 space-y-4"><input type="text" className="w-full border-2 p-4 rounded-2xl font-bold outline-none" value={staffForm.nom} onChange={e => setStaffForm({...staffForm, nom: e.target.value})} required placeholder="Nom"/><select className="w-full border-2 p-4 rounded-2xl font-black bg-white outline-none" value={staffForm.role} onChange={e => setStaffForm({...staffForm, role: e.target.value})}>{["Palefrenier", "Apprentie", "Stagiaire", "Monitrice", "Aide WE", "Aide ponctuel"].map(r => <option key={r} value={r}>{r}</option>)}</select><div className="space-y-2 text-[10px] font-black uppercase text-gray-400">Repos<div className="grid grid-cols-4 gap-1">{JOURS_SEMAINE.map(j => <button key={j} type="button" onClick={() => {const c = staffForm.repos || []; setStaffForm({...staffForm, repos: c.includes(j) ? c.filter(d => d !== j) : [...c, j]});}} className={`py-2 rounded-xl border-2 ${staffForm.repos?.includes(j) ? 'bg-[#8DC63F] border-[#8DC63F] text-[#1B2A49]' : 'bg-white text-gray-300'}`}>{j.substring(0,3)}</button>)}</div></div><button type="submit" className="w-full bg-[#1B2A49] text-white py-4 rounded-xl font-black uppercase">Enregistrer</button></form>
-                 <div className="p-8 md:w-1/2 overflow-y-auto bg-white">{membresBase.map(m => (<div key={m.id} className="flex justify-between items-center p-3 border rounded-xl mb-2 font-black text-sm text-left">{m.nom}<div className="flex gap-2"><button onClick={() => setStaffForm(m)} className="text-blue-600 p-2"><Edit size={16}/></button><button onClick={() => { if(confirm("Supprimer ?")) { pushToHistory(); setMembresBase(membresBase.filter(x => String(x.id) !== String(m.id))); } }} className="text-red-600 p-2"><Trash2 size={16}/></button></div></div>))}</div>
+              <div className="flex flex-col md:flex-row p-6 gap-6 text-left">
+                 <form onSubmit={(e) => {
+                    e.preventDefault(); pushToHistory();
+                    const newId = staffForm.id || Date.now().toString();
+                    const updated = staffForm.id ? membresBase.map(m => String(m.id) === String(staffForm.id) ? staffForm : m) : [...membresBase, { ...staffForm, id: newId }];
+                    setMembresBase(updated); setModalStaffOpen(false); setStaffForm({ id: null, nom: '', role: 'Palefrenier', total: 25, repos: [] });
+                 }} className="flex-1 space-y-4 text-left"><input type="text" className="w-full border-2 p-4 rounded-2xl font-bold outline-none" value={staffForm.nom} onChange={e => setStaffForm({...staffForm, nom: e.target.value})} required placeholder="Nom"/><select className="w-full border-2 p-4 rounded-2xl font-black bg-white outline-none" value={staffForm.role} onChange={e => setStaffForm({...staffForm, role: e.target.value})}>{["Palefrenier", "Apprentie", "Stagiaire", "Monitrice", "Aide WE", "Aide ponctuel"].map(r => <option key={r} value={r}>{r}</option>)}</select><div className="space-y-2 text-[10px] font-black uppercase text-gray-400">Repos<div className="grid grid-cols-4 gap-1">{JOURS_SEMAINE.map(j => <button key={j} type="button" onClick={() => {const c = staffForm.repos || []; setStaffForm({...staffForm, repos: c.includes(j) ? c.filter(d => d !== j) : [...c, j]});}} className={`py-2 rounded-xl border-2 ${staffForm.repos?.includes(j) ? 'bg-[#8DC63F] border-[#8DC63F] text-[#1B2A49]' : 'bg-white text-gray-300'}`}>{j.substring(0,3)}</button>)}</div></div><button type="submit" className="w-full bg-[#1B2A49] text-white py-4 rounded-xl font-black uppercase shadow-md">Enregistrer</button></form>
+                 <div className="p-8 md:w-1/2 overflow-y-auto bg-white">{membresBase.map(m => (<div key={m.id} className="flex justify-between items-center p-3 border rounded-xl mb-2 font-black text-sm text-left text-[#1B2A49]">{m.nom}<div className="flex gap-2"><button onClick={() => setStaffForm(m)} className="text-blue-600 p-2"><Edit size={16}/></button><button onClick={() => { if(confirm("Supprimer ?")) { pushToHistory(); setMembresBase(membresBase.filter(x => String(x.id) !== String(m.id))); } }} className="text-red-600 p-2"><Trash2 size={16}/></button></div></div>))}</div>
               </div>
             </div>
           </div>
         )}
 
+        {/* FORMULAIRE ABSENCE RÉACTIVÉ */}
         {modalCongeOpen && (
           <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[600] p-4 text-[#1B2A49]">
             <div className="bg-white rounded-[2rem] w-full max-w-md overflow-hidden shadow-2xl border-2 border-[#1B2A49]">
               <div className="p-5 bg-[#1B2A49] text-white flex justify-between items-center font-black uppercase text-sm">Enregistrement<X className="cursor-pointer" onClick={() => setModalCongeOpen(false)}/></div>
-              <form onSubmit={handleSaveConge} className="p-8 space-y-5 text-left"><select className="w-full border-2 p-4 rounded-2xl font-black outline-none" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}><option value="conge">🏝️ Congé (Décompté)</option><option value="deplacement">✈️ Déplacement (Maintenu)</option></select><div className="grid grid-cols-2 gap-3"><input type="date" className="border-2 p-4 rounded-2xl font-bold outline-none" value={formData.dateDebut} onChange={e => setFormData({...formData, dateDebut: e.target.value})} required/><input type="date" className="border-2 p-4 rounded-2xl font-bold outline-none" value={formData.dateFin} onChange={e => setFormData({...formData, dateFin: e.target.value})}/></div><select className="w-full border-2 p-4 rounded-2xl font-black outline-none" value={formData.userId} onChange={e => setFormData({...formData, userId: e.target.value})} required><option value="">-- Choisir employé --</option>{membresBase.map(m => <option key={m.id} value={m.id}>{m.nom}</option>)}</select><div className="flex gap-4 p-4 bg-gray-50 rounded-2xl justify-around border-2 border-dashed border-gray-200 text-[10px] font-black uppercase shadow-inner"><label className="cursor-pointer font-black text-blue-900"><input type="radio" checked={formData.statut === 'provisoire'} onChange={() => setFormData({...formData, statut:'provisoire'})}/> Provisoire</label><label className="cursor-pointer text-green-700 font-black"><input type="radio" checked={formData.statut === 'valide'} onChange={() => setFormData({...formData, statut:'valide'})}/> Validé</label></div><button type="submit" className="w-full bg-[#1B2A49] text-white py-5 rounded-2xl font-black uppercase text-sm shadow-xl">Confirmer</button></form>
+              <form onSubmit={handleSaveConge} className="p-8 space-y-5 text-left text-[#1B2A49]"><select className="w-full border-2 p-4 rounded-2xl font-black outline-none" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}><option value="conge">🏝️ Congé (Décompté)</option><option value="deplacement">✈️ Déplacement (Maintenu)</option></select><div className="grid grid-cols-2 gap-3"><input type="date" className="border-2 p-4 rounded-2xl font-bold outline-none" value={formData.dateDebut} onChange={e => setFormData({...formData, dateDebut: e.target.value})} required/><input type="date" className="border-2 p-4 rounded-2xl font-bold outline-none" value={formData.dateFin} onChange={e => setFormData({...formData, dateFin: e.target.value})}/></div><select className="w-full border-2 p-4 rounded-2xl font-black outline-none" value={formData.userId} onChange={e => setFormData({...formData, userId: e.target.value})} required><option value="">-- Choisir employé --</option>{membresBase.map(m => <option key={m.id} value={m.id}>{m.nom}</option>)}</select><div className="flex gap-4 p-4 bg-gray-50 rounded-2xl justify-around border-2 border-dashed border-gray-200 text-[10px] font-black uppercase shadow-inner"><label className="cursor-pointer font-black text-blue-900"><input type="radio" checked={formData.statut === 'provisoire'} onChange={() => setFormData({...formData, statut:'provisoire'})}/> Provisoire</label><label className="cursor-pointer text-green-700 font-black"><input type="radio" checked={formData.statut === 'valide'} onChange={() => setFormData({...formData, statut:'valide'})}/> Validé</label></div><button type="submit" className="w-full bg-[#1B2A49] text-white py-5 rounded-2xl font-black uppercase text-sm shadow-xl">Confirmer</button></form>
             </div>
           </div>
         )}
 
+        {/* MODAL EVT CLUB AVEC FERMETURE X */}
         {modalEvtOpen && (
           <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[600] p-4 text-[#1B2A49]">
             <div className="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl text-center relative"><X className="absolute top-4 right-4 cursor-pointer text-gray-400" onClick={() => setModalEvtOpen(false)}/><h3 className="font-black uppercase mb-4">Événement Club</h3><form onSubmit={(e) => { e.preventDefault(); pushToHistory(); const nx = { ...evenementsPerso }; nx[modalChoiceOpen] = [...(nx[modalChoiceOpen] || []), { id: Date.now(), type: evtForm.type, titre: evtForm.titre }]; setEvenementsPerso(nx); setModalEvtOpen(false); }} className="space-y-4"><input type="text" className="w-full border-2 p-4 rounded-2xl font-black outline-none text-[#1B2A49]" value={evtForm.titre} onChange={e => setEvtForm({...evtForm, titre: e.target.value})} required placeholder="Titre"/><select className="w-full border-2 p-4 rounded-2xl font-black bg-white" value={evtForm.type} onChange={e => setEvtForm({...evtForm, type: e.target.value})}><option value="concours_oui">🏇 Événement</option><option value="jour_ferie">🎉 Spécial</option></select><button type="submit" className="w-full bg-[#1B2A49] text-[#8DC63F] py-4 rounded-xl font-black uppercase">Valider</button></form></div>
           </div>
         )}
 
+        {/* MODAL NOTE AVEC POUBELLE */}
         {modalNoteOpen && (
           <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[600] p-4 text-[#1B2A49]">
              <div className="bg-white rounded-[2rem] w-full max-w-sm overflow-hidden border-4 border-yellow-400 shadow-2xl text-center"><div className="p-4 bg-yellow-400 font-black flex justify-between uppercase italic text-xs text-[#1B2A49]">Note du jour<X className="cursor-pointer" onClick={() => setModalNoteOpen(false)}/></div><form onSubmit={(e) => { e.preventDefault(); pushToHistory(); const nx = { ...notes }; if (!noteText.trim()) delete nx[modalChoiceOpen]; else nx[modalChoiceOpen] = noteText; setNotes(nx); setModalNoteOpen(false); }} className="p-6 space-y-4 text-[#1B2A49]"><textarea autoFocus className="w-full border-2 border-yellow-100 p-5 rounded-2xl bg-yellow-50 outline-none h-40 font-bold shadow-inner text-[#1B2A49]" value={noteText} onChange={e => setNoteText(e.target.value)} placeholder="Message..."/><div className="flex gap-2"><button type="button" onClick={() => { pushToHistory(); const nx = {...notes}; delete nx[modalChoiceOpen]; setNotes(nx); setModalNoteOpen(false); }} className="p-4 bg-red-100 text-red-600 rounded-xl hover:bg-red-200"><Trash2 size={20}/></button><button type="submit" className="flex-1 bg-yellow-400 text-[#1B2A49] font-black py-4 rounded-xl shadow-lg uppercase text-xs">Valider</button></div></form></div>
