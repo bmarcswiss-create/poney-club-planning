@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  Trash2, X, Plus, Edit, FilterX, Lock, Unlock, ChevronLeft, ChevronRight, RotateCcw, CheckCircle2, StickyNote, Calendar, ShieldCheck, UserCog, Activity, AlertTriangle, Info, TrendingUp, Menu
+  Trash2, X, Plus, Edit, Lock, Unlock, Calendar, StickyNote, UserCog, CheckCircle2, Menu, Download, Info, Plane
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
@@ -10,7 +10,6 @@ const supabaseKey = 'sb_publishable_azT_rAkqeE-zsnvolYSY9w_7MtlnBVI';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 const PIN_ADMIN = "poney"; 
-const PIN_DIRECTION = "poneyaurelieschaller";
 const JOURS_SEMAINE = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
 const LOGO_URL = "https://lnwvlyswsmtafyoepovq.supabase.co/storage/v1/object/public/logo/logo.png";
 
@@ -46,7 +45,7 @@ export default function App() {
   const todayStr = new Date().toLocaleDateString('en-CA');
   const [isLoaded, setIsLoaded] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [isDirAuth, setIsDirAuth] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [membresBase, setMembresBase] = useState([]);
   const [conges, setConges] = useState([]);
@@ -58,7 +57,6 @@ export default function App() {
   const [modalStaffOpen, setModalStaffOpen] = useState(false);
   const [modalChoiceOpen, setModalChoiceOpen] = useState(null);
   const [modalPinOpen, setModalPinOpen] = useState(false);
-  const [modalDirOpen, setModalDirOpen] = useState(false);
   const [modalNoteOpen, setModalNoteOpen] = useState(false);
   const [modalEvtOpen, setModalEvtOpen] = useState(false);
   
@@ -67,7 +65,6 @@ export default function App() {
   const [evtForm, setEvtForm] = useState({ dateDebut: todayStr, titre: '', type: 'club' });
   const [noteText, setNoteText] = useState("");
   const [pinInput, setPinInput] = useState("");
-  const [dirPinInput, setDirPinInput] = useState("");
 
   const syncAll = async (m, c, n, e, man) => {
     await supabase.from('app_state').upsert([
@@ -120,6 +117,32 @@ export default function App() {
     return { total: scheduled.length + ponctuel.length, scheduled, ponctuel, malades, absentsPlanifies: absPlanifies.map(a => ({ nom: membresBase.find(m => String(m.id) === String(a.userId))?.nom, type: a.category })) };
   };
 
+  const exportToCSV = () => {
+    let csv = "--- BILAN INDIVIDUEL ---\n";
+    csv += "Nom,Role,Quota Annuel,Conges Pris,Solde,Jours Maladie\n";
+    membresBase.forEach(m => {
+      const vacPrises = conges.filter(c => String(c.userId) === String(m.id) && c.category === 'conge').length;
+      const malJours = conges.filter(c => String(c.userId) === String(m.id) && c.category === 'maladie').length;
+      csv += `${m.nom},${m.role},${m.quotaVacances || 25},${vacPrises},${(m.quotaVacances || 25) - vacPrises},${malJours}\n`;
+    });
+
+    csv += "\n--- NOMBRE D'EMPLOYES PAR JOUR (2026) ---\n";
+    csv += "Date,Nombre de presents\n";
+    let d = new Date('2026-01-01');
+    while(d.getFullYear() === 2026) {
+      const dStr = d.toLocaleDateString('en-CA');
+      const pres = getDayPresence(dStr);
+      csv += `${dStr},${pres.total}\n`;
+      d.setDate(d.getDate() + 1);
+    }
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `export_poney_club_2026.csv`;
+    link.click();
+  };
+
   const calendrierRender = useMemo(() => {
     return ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"].map((mois, mIdx) => {
       const first = new Date(2026, mIdx, 1);
@@ -132,7 +155,7 @@ export default function App() {
       return (
         <div key={mois} className="bg-white rounded-[2.5rem] shadow-sm border border-white overflow-hidden flex flex-col h-fit transition-all hover:shadow-md">
           <div className="bg-gray-50/50 py-4 text-center font-black text-[#1B2A49] text-[10px] uppercase tracking-[0.2em] border-b border-gray-100">{mois}</div>
-          <div className="p-5 grid grid-cols-7 gap-2 flex-1 w-full box-border">
+          <div className="p-4 grid grid-cols-7 gap-2 flex-1 w-full box-border">
             {['L','M','M','J','V','S','D'].map(day => <div key={day} className="text-center text-[10px] font-bold text-gray-300 pb-1">{day}</div>)}
             {jours.map((dateObj, idx) => {
               if (!dateObj) return <div key={idx} className="aspect-square"></div>;
@@ -159,7 +182,7 @@ export default function App() {
                   )}
                   { (OFFICIAL_EVENTS_2026[dStr] || evenementsPerso[dStr]) && ( <div className="absolute bottom-0 w-full h-[2px] bg-purple-600"></div> )}
                   {notes[dStr] && <div className="absolute top-0 right-0 w-2 h-2 bg-yellow-400 rounded-bl-full shadow-sm"></div>}
-                  <span className={`z-10 font-black text-xs ${ (isAlerte || (absVis.length > 0 && !isAlerte)) ? 'text-white' : 'text-[#1B2A49]'}`}>{dateObj.getDate()}</span>
+                  <span className={`z-10 font-bold text-xs ${ (isAlerte || (absVis.length > 0 && !isAlerte)) ? 'text-white' : 'text-[#1B2A49]'}`}>{dateObj.getDate()}</span>
                 </div>
               );
             })}
@@ -172,9 +195,21 @@ export default function App() {
   return (
     <div className="flex h-screen bg-[#F2F2F7] text-[#1B2A49] overflow-hidden font-sans">
       
+      {/* MOBILE HAMBURGER */}
+      <div className="lg:hidden fixed top-4 left-4 z-[100]">
+        <button onClick={() => setIsSidebarOpen(true)} className="p-3 bg-[#1B2A49] text-white rounded-full shadow-xl">
+          <Menu size={24} />
+        </button>
+      </div>
+
+      {isSidebarOpen && (
+        <div className="fixed inset-0 bg-black/50 z-[110] lg:hidden" onClick={() => setIsSidebarOpen(false)}></div>
+      )}
+
       {/* SIDEBAR */}
-      <aside className="w-80 bg-[#1B2A49] flex flex-col shrink-0 shadow-2xl text-white z-30">
-        <div className="p-8 bg-[#141D36] flex flex-col items-center border-b-4 border-[#8DC63F] text-center">
+      <aside className={`fixed lg:static inset-y-0 left-0 w-80 bg-[#1B2A49] flex flex-col shrink-0 shadow-2xl text-white z-[120] transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+        <div className="p-8 bg-[#141D36] flex flex-col items-center border-b-4 border-[#8DC63F] text-center relative">
+          <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden absolute top-4 right-4 text-white/50"><X size={20}/></button>
           <img src={LOGO_URL} alt="Logo" className="w-20 h-20 bg-white rounded-full p-1 mb-4 shadow-xl" />
           <div className="flex flex-col items-center">
             <div className="flex items-center gap-2 mb-2">
@@ -203,7 +238,7 @@ export default function App() {
                   <div key={role}>
                     <h4 className="text-[10px] opacity-40 uppercase font-black tracking-widest mb-3 border-b border-white/10 pb-1">{role}s</h4>
                     {mm.map(m => (
-                      <div key={m.id} onClick={() => setFiltreEmploye(filtreEmploye === m.id ? null : m.id)} className={`p-3 rounded-xl mb-2 cursor-pointer transition-all ${filtreEmploye === m.id ? 'bg-[#8DC63F] text-[#1B2A49]' : 'bg-[#213459]'}`}>
+                      <div key={m.id} onClick={() => { setFiltreEmploye(filtreEmploye === m.id ? null : m.id); setIsSidebarOpen(false); }} className={`p-3 rounded-xl mb-2 cursor-pointer transition-all ${filtreEmploye === m.id ? 'bg-[#8DC63F] text-[#1B2A49]' : 'bg-[#213459]'}`}>
                         <span className="block mb-1">{m.nom}</span>
                         <div className="flex gap-1 font-mono text-[10px]">
                            {['L','M','M','J','V','S','D'].map((l, i) => <span key={i} className={m.repos?.includes(JOURS_SEMAINE[i]) ? "text-red-400" : "text-green-400"}>{l}</span>)}
@@ -216,8 +251,12 @@ export default function App() {
            </div>
         </div>
         <div className="p-4 border-t border-white/10 space-y-2">
-           {isAdmin && <button onClick={() => setModalStaffOpen(true)} className="w-full py-3 bg-white/5 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-white/10 transition-colors"><UserCog size={16}/> Équipe</button>}
-           <button onClick={() => { setDirPinInput(""); setModalDirOpen(true); }} className="w-full py-3 bg-purple-600/30 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-purple-600/50 transition-colors"><ShieldCheck size={16}/> Direction</button>
+           {isAdmin && (
+             <>
+                <button onClick={() => setModalStaffOpen(true)} className="w-full py-3 bg-white/5 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-white/10 transition-colors"><UserCog size={16}/> Équipe</button>
+                <button onClick={exportToCSV} className="w-full py-3 bg-cyan-600/30 text-cyan-400 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-cyan-600/50 transition-colors border border-cyan-500/30"><Download size={16}/> Export Chiffres</button>
+             </>
+           )}
         </div>
       </aside>
 
@@ -225,60 +264,74 @@ export default function App() {
       <main className="flex-1 flex flex-col min-w-0 bg-[#F2F2F7] overflow-y-auto relative p-6 md:p-12 scrollbar-hide">
         <div className="max-w-7xl mx-auto w-full space-y-12">
           
-          {/* HEADER SELECTIONNÉ - CORRECTIONS COULEURS PRIORITAIRES */}
           <header className="flex flex-col items-center">
-            <div className={`w-full max-w-2xl rounded-[3rem] border-4 p-10 transition-all shadow-xl flex flex-col justify-center items-center 
-              ${getDayPresence(selectedDate).total < 4 
-                ? 'bg-[#E63946] border-[#D62828] text-white animate-pulse' 
-                : (selectedDate === todayStr 
-                    ? 'bg-amber-100 border-orange-500 text-[#1B2A49]' 
-                    : 'bg-white border-white text-[#1B2A49]')
-              }`}>
-              
-              <h3 className="text-3xl font-black uppercase text-center mb-4 leading-tight tracking-tighter">
+            <div className={`w-full max-w-3xl rounded-[3rem] border-4 flex flex-col justify-center items-center p-8 transition-all shadow-xl ${selectedDate === todayStr ? 'border-orange-500 ring-8 ring-orange-50' : 'border-white bg-white'} ${getDayPresence(selectedDate).total < 4 ? 'bg-red-600 text-white animate-pulse border-red-600' : ''}`}>
+              <h3 className="text-2xl font-black uppercase text-center mb-4 leading-tight tracking-tighter">
                   {new Date(selectedDate).toLocaleDateString('fr-CH', {weekday:'long', day:'numeric', month:'long', year:'numeric'})}
               </h3>
               
-              <div className="flex flex-col items-center w-full mt-2">
-                  <div className={`flex items-center gap-6 px-10 py-5 rounded-full shadow-2xl transition-all 
-                    ${getDayPresence(selectedDate).total < 4 
-                      ? 'bg-white text-[#E63946]' 
-                      : 'bg-[#1B2A49] text-white'}`}>
-                    
-                    <span className={`font-black text-5xl ${getDayPresence(selectedDate).total < 4 ? 'text-[#E63946]' : 'text-[#8DC63F]'}`}>
-                        {getDayPresence(selectedDate).total}
-                    </span>
-                    
-                    <div className={`text-sm font-bold leading-snug flex flex-wrap gap-x-2 border-l pl-6 text-left min-w-[150px] 
-                        ${getDayPresence(selectedDate).total < 4 ? 'border-red-100' : 'border-white/20'}`}>
-                        
-                        <span className={`uppercase tracking-widest w-full text-[10px] mb-1 ${getDayPresence(selectedDate).total < 4 ? 'text-red-400' : 'opacity-40'}`}>
-                            Présents :
-                        </span>
-                        
-                        {getDayPresence(selectedDate).scheduled.map((p, i) => (
-                          <span key={p.id}>
-                            {p.nom}{i < getDayPresence(selectedDate).scheduled.length - 1 || getDayPresence(selectedDate).ponctuel.length > 0 ? ',' : ''} 
-                          </span>
-                        ))}
-                        
-                        {getDayPresence(selectedDate).ponctuel.map((p, i) => (
-                          <span key={p.id} className={getDayPresence(selectedDate).total < 4 ? 'text-[#E63946] font-black' : 'text-cyan-300 italic font-black'}>
-                            {` (+ ${p.nom})`}
-                          </span>
-                        ))}
+              <div className="flex flex-col items-center w-full">
+                  <div className="flex items-center gap-6 bg-[#1B2A49] px-8 py-4 rounded-full text-white shadow-2xl">
+                    <span className="text-[#8DC63F] font-black text-4xl">{getDayPresence(selectedDate).total}</span>
+                    <div className="text-[11px] font-bold leading-tight flex flex-wrap gap-x-2 border-l border-white/20 pl-6 text-left min-w-[150px]">
+                        <span className="opacity-40 uppercase tracking-widest w-full text-[9px] mb-1">Présents :</span>
+                        {getDayPresence(selectedDate).scheduled.map((p, i) => <span key={p.id}>{p.nom}{i < getDayPresence(selectedDate).scheduled.length - 1 || getDayPresence(selectedDate).ponctuel.length > 0 ? ',' : ''} </span>)}
+                        {getDayPresence(selectedDate).ponctuel.map((p, i) => <span key={p.id} className="text-cyan-300 italic font-black"> (+ {p.nom}){i < getDayPresence(selectedDate).ponctuel.length - 1 ? ',' : ''}</span>)}
                     </div>
+                  </div>
+
+                  {/* BANDEAU D'INFORMATION DÉTAILLÉ */}
+                  <div className="mt-8 w-full grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+                     {/* COLONNE GAUCHE : ABSENCES PAR TYPE */}
+                     <div className="space-y-3">
+                        {getDayPresence(selectedDate).malades.length > 0 && (
+                          <div className="bg-orange-50 p-3 rounded-2xl border border-orange-100">
+                             <span className="text-[9px] font-black uppercase text-orange-400 block mb-1">🤒 Maladie</span>
+                             <div className="flex flex-wrap gap-2 text-[10px] font-bold text-orange-700">
+                               {getDayPresence(selectedDate).malades.map(m => <span key={m.id}>{m.nom}</span>)}
+                             </div>
+                          </div>
+                        )}
+                        {getDayPresence(selectedDate).absentsPlanifies.filter(a => a.type === 'conge').length > 0 && (
+                          <div className="bg-gray-50 p-3 rounded-2xl border border-gray-100">
+                             <span className="text-[9px] font-black uppercase text-[#1B2A49] opacity-40 block mb-1">🏝️ Congés / Vacances</span>
+                             <div className="flex flex-wrap gap-2 text-[10px] font-bold text-[#1B2A49]">
+                               {getDayPresence(selectedDate).absentsPlanifies.filter(a => a.type === 'conge').map((a, i) => <span key={i}>{a.nom}</span>)}
+                             </div>
+                          </div>
+                        )}
+                        {getDayPresence(selectedDate).absentsPlanifies.filter(a => a.type === 'deplacement').length > 0 && (
+                          <div className="bg-cyan-50 p-3 rounded-2xl border border-cyan-100">
+                             <span className="text-[9px] font-black uppercase text-cyan-500 block mb-1">✈️ Déplacement Pro</span>
+                             <div className="flex flex-wrap gap-2 text-[10px] font-bold text-cyan-700">
+                               {getDayPresence(selectedDate).absentsPlanifies.filter(a => a.type === 'deplacement').map((a, i) => <span key={i}>{a.nom}</span>)}
+                             </div>
+                          </div>
+                        )}
+                     </div>
+
+                     {/* COLONNE DROITE : ÉVÉNEMENTS & NOTES */}
+                     <div className="space-y-3">
+                        {(OFFICIAL_EVENTS_2026[selectedDate] || evenementsPerso[selectedDate] || notes[selectedDate]) && (
+                          <div className="bg-purple-50 p-3 rounded-2xl border border-purple-100 h-full">
+                             <span className="text-[9px] font-black uppercase opacity-40 block mb-1">Événements & Notes</span>
+                             <div className="space-y-1.5">
+                               {OFFICIAL_EVENTS_2026[selectedDate]?.map((e, i) => <div key={i} className="text-[10px] font-black text-purple-700 uppercase flex items-center gap-1"><Info size={10}/> {e.titre}</div>)}
+                               {evenementsPerso[selectedDate]?.map((e, i) => <div key={i} className="text-[10px] font-black text-blue-700 uppercase flex items-center gap-1"><Calendar size={10}/> {e.titre}</div>)}
+                               {notes[selectedDate] && <div className="text-[10px] font-bold text-amber-700 italic border-t border-amber-100 pt-1 mt-1 flex items-start gap-1"><StickyNote size={10} className="shrink-0 mt-0.5"/> "{notes[selectedDate]}"</div>}
+                             </div>
+                          </div>
+                        )}
+                     </div>
                   </div>
               </div>
             </div>
           </header>
 
-          {/* GRILLE CALENDRIER - ORGANISÉ EN 3 COLONNES SUR PC */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-12">
             {calendrierRender}
           </div>
 
-          {/* LÉGENDE */}
           <div className="bg-white/80 backdrop-blur-md rounded-3xl p-6 border border-white flex flex-wrap justify-center gap-6 md:gap-10 text-[10px] font-black uppercase tracking-widest shadow-sm">
             <div className="flex items-center gap-2 text-cyan-600 italic font-black"><CheckCircle2 size={16}/> Ponctuel</div>
             <div className="flex items-center gap-2 text-orange-500 uppercase font-black">🤒 Maladie</div>
@@ -289,7 +342,7 @@ export default function App() {
         </div>
       </main>
 
-      {/* MODALES D'INTERACTION */}
+      {/* MODALES */}
       {modalChoiceOpen && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[500] p-4 text-[#1B2A49]">
           <div className="bg-white rounded-[2.5rem] w-full max-w-sm p-6 space-y-4 border-t-8 border-[#8DC63F] shadow-2xl text-center">
@@ -400,28 +453,6 @@ export default function App() {
               <button type="submit" className="w-full py-4 bg-black text-white rounded-xl font-bold uppercase text-xs">Déverrouiller</button>
             </form>
             <button onClick={() => setModalPinOpen(false)} className="mt-4 text-gray-400 text-xs">Annuler</button>
-          </div>
-        </div>
-      )}
-
-      {modalDirOpen && (
-        <div className="fixed inset-0 bg-black/95 flex items-center justify-center z-[999] p-4 text-[#1B2A49]">
-          <div className="bg-white rounded-[2rem] w-full max-w-6xl h-[90vh] flex flex-col shadow-2xl border-t-8 border-purple-600 overflow-hidden relative">
-            <div className="p-6 bg-purple-600 text-white flex justify-between items-center shrink-0">
-              <h2 className="text-xl font-black uppercase flex items-center gap-2"><ShieldCheck/> Espace Direction</h2>
-              <X onClick={() => { setIsDirAuth(false); setModalDirOpen(false); }} className="cursor-pointer" size={24}/>
-            </div>
-            {!isDirAuth ? (
-              <div className="flex-1 flex flex-col items-center justify-center p-12 space-y-6 text-center bg-white">
-                <Lock size={64} className="text-purple-100 mb-2"/>
-                <input autoFocus type="password" placeholder="CODE" className="w-full max-w-xs text-center text-5xl border-b-4 border-purple-600 p-4 outline-none font-black" value={dirPinInput} onChange={e => setDirPinInput(e.target.value)} onKeyDown={e => { if(e.key==='Enter' && dirPinInput.toLowerCase() === PIN_DIRECTION.toLowerCase()) setIsDirAuth(true); }}/>
-                <button onClick={() => { if(dirPinInput.toLowerCase() === PIN_DIRECTION.toLowerCase()) setIsDirAuth(true); else alert("Accès refusé"); }} className="bg-purple-600 text-white px-16 py-4 rounded-2xl font-black uppercase text-sm shadow-xl">Accéder</button>
-              </div>
-            ) : (
-              <div className="flex-1 overflow-y-auto p-12 bg-gray-50 space-y-8 scrollbar-hide">
-                {/* Statistiques direction... */}
-              </div>
-            )}
           </div>
         </div>
       )}
