@@ -108,7 +108,6 @@ export default function App() {
     const nomJour = JOURS_SEMAINE[d.getDay() === 0 ? 6 : d.getDay() - 1];
     const allAbs = congesParDate[dateStr] || [];
     
-    let totalPoids = 0;
     let scheduled = [], ponctuel = [], malades = [], absentsPlanifies = [];
 
     membresBase.forEach(m => {
@@ -116,6 +115,7 @@ export default function App() {
         const override = manualPresence[dateStr]?.[mId];
         const absence = allAbs.find(a => String(a.userId) === mId);
 
+        // AIDE PONCTUEL
         if (m.role === "Aide ponctuel") {
             if (absence) {
                 if (absence.category === 'maladie') malades.push({ ...m, periode: absence.periode });
@@ -123,21 +123,26 @@ export default function App() {
                 return;
             }
             if (override === true) {
-                totalPoids += 1.0;
                 ponctuel.push(m);
             }
             return;
         }
 
+        // EMPLOYÉS FIXES
         const shiftType = m.planning?.[nomJour] || 'jour';
-        const baseWeight = SHIFT_TYPES[shiftType].weight;
 
         if (absence) {
-            const weightAbs = (absence.periode === 'jour') ? baseWeight : 0.5;
-            if (absence.category === 'maladie') {
-                malades.push({ ...m, periode: absence.periode });
+            // Si l'absence est de type "matin" ou "AM" mais que le shift de base était "journée", 
+            // la personne est techniquement présente sur l'autre demi-journée
+            if (absence.periode !== 'jour' && shiftType === 'jour') {
+                scheduled.push(m);
+                // On l'ajoute aussi aux absents pour l'info bandeau
+                if (absence.category === 'maladie') malades.push({ ...m, periode: absence.periode });
+                else absentsPlanifies.push({ nom: m.nom, type: absence.category, periode: absence.periode });
             } else {
-                absentsPlanifies.push({ nom: m.nom, type: absence.category, periode: absence.periode });
+                // Absence totale ou sur son seul créneau
+                if (absence.category === 'maladie') malades.push({ ...m, periode: absence.periode });
+                else absentsPlanifies.push({ nom: m.nom, type: absence.category, periode: absence.periode });
             }
             return;
         }
@@ -145,14 +150,18 @@ export default function App() {
         if (shiftType === 'repos' && override !== true) return;
         if (override === false) return;
         
-        const poidsFinal = (override === true && shiftType === 'repos') ? 1.0 : baseWeight;
-        totalPoids += poidsFinal;
-
         if (override === true && shiftType === 'repos') ponctuel.push(m);
         else scheduled.push(m);
     });
 
-    return { total: totalPoids, scheduled, ponctuel, malades, absentsPlanifies };
+    // LE TOTAL COMPTE LES TÊTES (scheduled + ponctuel)
+    return { 
+        total: scheduled.length + ponctuel.length, 
+        scheduled, 
+        ponctuel, 
+        malades, 
+        absentsPlanifies 
+    };
   };
 
   const exportToCSV = () => {
@@ -218,6 +227,12 @@ export default function App() {
     });
   }, [congesParDate, manualPresence, membresBase, todayStr, notes, evenementsPerso]);
 
+  const getCompactPeriod = (p) => {
+    if (p === 'matin') return '(M)';
+    if (p === 'apres-midi') return '(AM)';
+    return '';
+  };
+
   return (
     <div className="flex h-screen bg-[#F2F2F7] text-[#1B2A49] overflow-hidden font-sans">
       <div className="lg:hidden fixed top-4 left-4 z-[100]"><button onClick={() => setIsSidebarOpen(true)} className="p-3 bg-[#1B2A49] text-white rounded-full shadow-xl"><Menu size={24} /></button></div>
@@ -240,7 +255,7 @@ export default function App() {
            )}
            <button onClick={() => setFiltreEmploye(null)} className={`w-full bg-white/10 text-white font-bold py-3 rounded-xl text-xs ${!filtreEmploye ? 'ring-2 ring-[#8DC63F]' : ''}`}>TOUTE L'ÉQUIPE</button>
            <div className="space-y-6 pt-4 border-t border-white/5 text-left text-sm font-bold">
-              {["Palefrenier", "Apprentie", "Monitrice", "Aide WE"].map(role => {
+              {["Palefrenier", "Apprentie", "Monitrice", "Aide WE", "Aide ponctuel"].map(role => {
                 const mm = membresBase.filter(m => m.role === role); if (!mm.length) return null;
                 return (
                   <div key={role}>
@@ -267,9 +282,17 @@ export default function App() {
 
       <main className="flex-1 flex flex-col min-w-0 bg-[#F2F2F7] overflow-y-auto relative p-6 md:p-12 scrollbar-hide">
         <div className="max-w-7xl mx-auto w-full space-y-12">
+          
           <header className="flex flex-col items-center">
-            <div className={`w-full max-w-3xl rounded-[3rem] border-4 flex flex-col justify-center items-center p-8 transition-all shadow-xl ${getDayPresence(selectedDate).total < 4 ? 'bg-red-600 text-white border-red-600 animate-pulse' : (selectedDate === todayStr ? 'bg-white border-orange-500 ring-8 ring-orange-50' : 'bg-white border-white')}`}>
-              <h3 className="text-2xl font-black uppercase text-center mb-4 leading-tight tracking-tighter">{new Date(selectedDate).toLocaleDateString('fr-CH', {weekday:'long', day:'numeric', month:'long', year:'numeric'})}</h3>
+            <div className={`w-full max-w-3xl rounded-[3rem] border-4 flex flex-col justify-center items-center p-8 transition-all shadow-xl 
+              ${getDayPresence(selectedDate).total < 4 
+                ? 'bg-red-600 text-white border-red-600 animate-pulse' 
+                : (selectedDate === todayStr ? 'bg-white border-orange-500 ring-8 ring-orange-50' : 'bg-white border-white')
+              }`}>
+              <h3 className="text-2xl font-black uppercase text-center mb-4 leading-tight tracking-tighter">
+                  {new Date(selectedDate).toLocaleDateString('fr-CH', {weekday:'long', day:'numeric', month:'long', year:'numeric'})}
+              </h3>
+              
               <div className="flex flex-col items-center w-full">
                   <div className="flex items-center gap-6 bg-[#1B2A49] px-8 py-4 rounded-full text-white shadow-2xl">
                     <span className="text-[#8DC63F] font-black text-4xl">{getDayPresence(selectedDate).total}</span>
@@ -279,18 +302,36 @@ export default function App() {
                         {getDayPresence(selectedDate).ponctuel.map((p, i) => <span key={p.id} className="text-cyan-300 italic font-black"> (+ {p.nom}){i < getDayPresence(selectedDate).ponctuel.length - 1 ? ',' : ''}</span>)}
                     </div>
                   </div>
+
                   <div className="mt-8 w-full grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
                      <div className="space-y-3">
                         {getDayPresence(selectedDate).malades.length > 0 && (
-                          <div className="bg-orange-50 p-3 rounded-2xl border border-orange-100"><span className="text-[9px] font-black uppercase text-orange-400 block mb-1">🤒 Maladie</span><div className="flex flex-wrap gap-2 text-[10px] font-bold text-orange-700">{getDayPresence(selectedDate).malades.map((m, i) => <span key={i}>{m.nom} ({m.periode === 'jour' ? '1.0' : '0.5'})</span>)}</div></div>
+                          <div className="bg-orange-50 p-3 rounded-2xl border border-orange-100">
+                             <span className="text-[9px] font-black uppercase text-orange-400 block mb-1">🤒 Maladie</span>
+                             <div className="flex flex-wrap gap-2 text-[10px] font-bold text-orange-700">
+                               {getDayPresence(selectedDate).malades.map((m, i) => <span key={i}>{m.nom} {getCompactPeriod(m.periode)}</span>)}
+                             </div>
+                          </div>
                         )}
                         {getDayPresence(selectedDate).absentsPlanifies.length > 0 && (
-                          <div className="bg-gray-50 p-3 rounded-2xl border border-gray-100"><span className="text-[9px] font-black uppercase text-[#1B2A49] opacity-40 block mb-1">🏝️ Absences</span><div className="flex flex-wrap gap-2 text-[10px] font-bold text-[#1B2A49]">{getDayPresence(selectedDate).absentsPlanifies.map((a, i) => <span key={i}>{a.nom} ({a.periode === 'jour' ? '1.0' : '0.5'})</span>)}</div></div>
+                          <div className="bg-gray-50 p-3 rounded-2xl border border-gray-100">
+                             <span className="text-[9px] font-black uppercase text-[#1B2A49] opacity-40 block mb-1">🏝️ Absences</span>
+                             <div className="flex flex-wrap gap-2 text-[10px] font-bold text-[#1B2A49]">
+                               {getDayPresence(selectedDate).absentsPlanifies.map((a, i) => <span key={i}>{a.nom} {getCompactPeriod(a.periode)}</span>)}
+                             </div>
+                          </div>
                         )}
                      </div>
                      <div className="space-y-3">
                         {(OFFICIAL_EVENTS_2026[selectedDate] || evenementsPerso[selectedDate] || notes[selectedDate]) && (
-                          <div className="bg-purple-50 p-3 rounded-2xl border border-purple-100 h-full"><span className="text-[9px] font-black uppercase opacity-40 block mb-1">Événements & Notes</span><div className="space-y-1.5">{OFFICIAL_EVENTS_2026[selectedDate]?.map((e, i) => <div key={i} className="text-[10px] font-black text-purple-700 uppercase flex items-center gap-1"><Info size={10}/> {e.titre}</div>)}{evenementsPerso[selectedDate]?.map((e, i) => <div key={i} className="text-[10px] font-black text-blue-700 uppercase flex items-center gap-1"><Calendar size={10}/> {e.titre}</div>)}{notes[selectedDate] && <div className="text-[10px] font-bold text-amber-700 italic border-t border-amber-100 pt-1 mt-1 flex items-start gap-1"><StickyNote size={10} className="shrink-0 mt-0.5"/> "{notes[selectedDate]}"</div>}</div></div>
+                          <div className="bg-purple-50 p-3 rounded-2xl border border-purple-100 h-full">
+                             <span className="text-[9px] font-black uppercase opacity-40 block mb-1">Événements & Notes</span>
+                             <div className="space-y-1.5">
+                               {OFFICIAL_EVENTS_2026[selectedDate]?.map((e, i) => <div key={i} className="text-[10px] font-black text-purple-700 uppercase flex items-center gap-1"><Info size={10}/> {e.titre}</div>)}
+                               {evenementsPerso[selectedDate]?.map((e, i) => <div key={i} className="text-[10px] font-black text-blue-700 uppercase flex items-center gap-1"><Calendar size={10}/> {e.titre}</div>)}
+                               {notes[selectedDate] && <div className="text-[10px] font-bold text-amber-700 italic border-t border-amber-100 pt-1 mt-1 flex items-start gap-1"><StickyNote size={10} className="shrink-0 mt-0.5"/> "{notes[selectedDate]}"</div>}
+                             </div>
+                          </div>
                         )}
                      </div>
                   </div>
@@ -300,7 +341,6 @@ export default function App() {
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-12">{calendrierRender}</div>
 
-          {/* LÉGENDE RÉ-INSÉRÉE ICI */}
           <div className="bg-white/80 backdrop-blur-md rounded-3xl p-6 border border-white flex flex-wrap justify-center gap-6 md:gap-10 text-[10px] font-black uppercase tracking-widest shadow-sm">
             <div className="flex items-center gap-2 text-cyan-600 italic font-black"><CheckCircle2 size={16}/> Ponctuel</div>
             <div className="flex items-center gap-2 text-orange-500 uppercase font-black">🤒 Maladie</div>
@@ -382,7 +422,7 @@ export default function App() {
         </div>
       )}
 
-      {/* MODALES CLASSIQUES */}
+      {/* MODALE CHOIX JOUR */}
       {modalChoiceOpen && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[500] p-4 text-[#1B2A49]">
           <div className="bg-white rounded-[2.5rem] w-full max-w-md p-6 space-y-6 border-t-8 border-[#8DC63F] shadow-2xl">
@@ -395,12 +435,60 @@ export default function App() {
                     return (<label key={m.id} className={`flex items-center gap-2 p-2 hover:bg-white rounded transition-all cursor-pointer ${isMalade ? 'opacity-30' : ''}`}><input type="checkbox" disabled={isMalade} className="w-5 h-5 accent-[#8DC63F]" checked={isPresent} onChange={async () => { const dOver = manualPresence[modalChoiceOpen] || {}; const newMan = { ...manualPresence, [modalChoiceOpen]: { ...dOver, [m.id]: !isPresent } }; setManualPresence(newMan); await syncAll(membresBase, conges, notes, evenementsPerso, newMan); }} /><span className={`text-[11px] font-bold truncate ${isMalade ? 'line-through text-orange-600' : ''}`}>{m.nom}</span></label>)
                 })}
             </div>
+            {isAdmin && congesParDate[modalChoiceOpen]?.length > 0 && (
+              <div className="space-y-2 border-t pt-4">
+                <span className="text-[9px] font-black uppercase opacity-40">Gérer les absences :</span>
+                <div className="space-y-2">
+                  {congesParDate[modalChoiceOpen].map((abs) => {
+                    const employe = membresBase.find(m => String(m.id) === String(abs.userId));
+                    return (
+                      <div key={abs.id} className="flex flex-col bg-gray-100 p-3 rounded-xl gap-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-[11px] font-black">{employe?.nom} ({abs.category})</span>
+                          <button onClick={async () => {
+                            const newC = conges.filter(c => c.id !== abs.id);
+                            setConges(newC);
+                            await syncAll(membresBase, newC, notes, evenementsPerso, manualPresence);
+                          }} className="text-red-500 p-1 hover:bg-red-50 rounded"><Trash2 size={14}/></button>
+                        </div>
+                        <div className="flex gap-2">
+                          {(abs.category === 'conge' || abs.category === 'formation') && (
+                            <button onClick={async () => {
+                              const newStat = abs.statut === 'provisoire' ? 'valide' : 'provisoire';
+                              const newC = conges.map(c => c.id === abs.id ? {...c, statut: newStat} : c);
+                              setConges(newC);
+                              await syncAll(membresBase, newC, notes, evenementsPerso, manualPresence);
+                            }} className={`flex-1 py-1 rounded-lg text-[9px] font-black uppercase flex items-center justify-center gap-1 ${abs.statut === 'valide' ? 'bg-green-600 text-white' : 'bg-orange-400 text-white'}`}>
+                              {abs.statut === 'valide' ? <><Check size={10}/> Validé</> : 'Provisoire'}
+                            </button>
+                          )}
+                          <select 
+                            className="flex-1 bg-white border border-gray-200 rounded-lg text-[9px] font-bold p-1 outline-none"
+                            value={abs.periode}
+                            onChange={async (e) => {
+                              const newC = conges.map(c => c.id === abs.id ? {...c, periode: e.target.value} : c);
+                              setConges(newC);
+                              await syncAll(membresBase, newC, notes, evenementsPerso, manualPresence);
+                            }}
+                          >
+                            <option value="jour">Journée</option>
+                            <option value="matin">Matin</option>
+                            <option value="apres-midi">Après-midi</option>
+                          </select>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
             {isAdmin && (<div className="space-y-2 pt-2 border-t mt-2"><button onClick={() => { setFormData({ ...formData, dateDebut: modalChoiceOpen, dateFin: modalChoiceOpen, category: 'conge', statut: 'provisoire', periode: 'jour' }); setModalCongeOpen(true); setModalChoiceOpen(null); }} className="w-full py-4 bg-[#8DC63F] text-[#1B2A49] font-black rounded-2xl uppercase text-xs shadow-md">Ajouter Absence</button><div className="grid grid-cols-2 gap-2"><button onClick={() => { setModalEvtOpen(true); setModalChoiceOpen(null); }} className="bg-blue-600 text-white py-3 rounded-xl text-[10px] font-black uppercase">Event</button><button onClick={() => { setNoteText(notes[modalChoiceOpen] || ""); setModalNoteOpen(true); setModalChoiceOpen(null); }} className="bg-yellow-400 text-[#1B2A49] py-3 rounded-xl text-[10px] font-black uppercase">Post-it</button></div></div>)}
             <button onClick={() => setModalChoiceOpen(null)} className="w-full text-gray-400 font-bold text-xs uppercase py-2">Fermer</button>
           </div>
         </div>
       )}
 
+      {/* MODALE CONGE */}
       {modalCongeOpen && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[600] p-4 text-[#1B2A49]">
           <div className="bg-white rounded-[2.5rem] w-full max-w-md overflow-hidden shadow-2xl border-2 border-[#1B2A49]">
@@ -416,9 +504,11 @@ export default function App() {
         </div>
       )}
 
+      {/* MODALES PIN / NOTE / EVT */}
       {modalPinOpen && (<div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[1000] p-4"><div className="bg-white rounded-3xl p-8 w-full max-w-sm text-center shadow-2xl border-b-[12px] border-black"><Lock className="mx-auto mb-4" size={40} /><form onSubmit={(e) => { e.preventDefault(); if (pinInput.toLowerCase() === PIN_ADMIN) { setIsAdmin(true); setModalPinOpen(false); setPinInput(""); } else { alert("Code incorrect"); } }} className="space-y-4"><input autoFocus type="password" placeholder="PIN" className="w-full text-center text-3xl border-b-4 border-black p-3 outline-none font-black" value={pinInput} onChange={e => setPinInput(e.target.value)} /><button type="submit" className="w-full py-4 bg-black text-white rounded-xl font-bold uppercase text-xs">Déverrouiller</button></form><button onClick={() => setModalPinOpen(false)} className="mt-4 text-gray-400 text-xs">Annuler</button></div></div>)}
       {modalNoteOpen && (<div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[601] p-4"><div className="bg-white rounded-[2rem] w-full max-w-sm overflow-hidden border-4 border-yellow-400 shadow-2xl text-center"><div className="p-4 bg-yellow-400 font-black flex justify-between uppercase text-[10px]">Note<X onClick={() => setModalNoteOpen(false)} size={18}/></div><form onSubmit={async (e) => { e.preventDefault(); const nx = { ...notes }; if (!noteText.trim()) delete nx[selectedDate]; else nx[selectedDate] = noteText; setNotes(nx); setModalNoteOpen(false); await syncAll(membresBase, conges, nx, evenementsPerso, manualPresence); }} className="p-6 space-y-4"><textarea autoFocus className="w-full border-2 p-5 rounded-2xl bg-yellow-50 outline-none h-40 font-bold" value={noteText} onChange={e => setNoteText(e.target.value)}/><button type="submit" className="w-full bg-yellow-400 text-[#1B2A49] font-black py-4 rounded-xl uppercase text-xs shadow-md">Enregistrer</button></form></div></div>)}
       {modalEvtOpen && (<div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[601] p-4 text-[#1B2A49]"><div className="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl relative text-center"><X className="absolute top-6 right-6 cursor-pointer text-gray-400" onClick={() => setModalEvtOpen(false)} size={20}/><h3 className="font-black uppercase mb-8 text-base tracking-tighter">Événement</h3><form onSubmit={async (e) => { e.preventDefault(); const nx = { ...evenementsPerso }; const date = evtForm.dateDebut; nx[date] = [...(nx[date] || []), { id: Date.now(), titre: evtForm.titre, type: evtForm.type }]; setEvenementsPerso(nx); setModalEvtOpen(false); await syncAll(membresBase, conges, notes, nx, manualPresence); }} className="space-y-4 text-left"><input type="date" className="w-full border-2 p-4 rounded-xl font-bold" value={evtForm.dateDebut} onChange={e => setEvtForm({...evtForm, dateDebut: e.target.value})}/><input type="text" className="w-full border-2 p-4 rounded-xl font-black" placeholder="Titre" value={evtForm.titre} onChange={e => setEvtForm({...evtForm, titre: e.target.value})} required/><button type="submit" className="w-full bg-[#1B2A49] text-white py-4 rounded-xl font-black uppercase text-xs shadow-md">Ajouter</button></form></div></div>)}
+
     </div>
   );
 }
