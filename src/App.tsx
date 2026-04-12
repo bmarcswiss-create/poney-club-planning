@@ -1,3 +1,4 @@
+import Accueil from './Accueil';
 // @ts-nocheck
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
@@ -49,6 +50,7 @@ const getOfficialEvents = () => {
 const OFFICIAL_EVENTS_2026 = getOfficialEvents();
 
 export default function App() {
+  const [vueActive, setVueActive] = useState('accueil');
   const todayStr = new Date().toLocaleDateString('en-CA');
   
   // --- ÉTATS (STATES) ---
@@ -237,7 +239,10 @@ export default function App() {
   const getCompactPeriod = (p) => (p === 'matin' ? '(M)' : p === 'apres-midi' ? '(AM)' : '');
 
   if (!isLoaded) return <div className="h-screen w-full flex items-center justify-center bg-[#F2F2F7] font-black uppercase tracking-widest text-[#1B2A49]">Chargement...</div>;
-
+// SI ON EST SUR L'ACCUEIL
+if (vueActive === 'accueil') {
+  return <Accueil onNavigate={(page) => setVueActive(page)} />;
+}
   return (
     <div className="flex h-screen bg-[#F2F2F7] text-[#1B2A49] overflow-hidden font-sans">
       
@@ -287,7 +292,30 @@ export default function App() {
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0 bg-[#F2F2F7] overflow-y-auto relative p-6 md:p-12 scrollbar-hide">
-        <div className="max-w-7xl mx-auto w-full space-y-12">
+  
+  {/* BOUTON RETOUR MENU - Placé au tout début du contenu principal */}
+  <button 
+    onClick={() => setVueActive('accueil')}
+    style={{
+      position: 'fixed',
+      top: '20px',
+      right: '20px',
+      zIndex: 9999,
+      backgroundColor: '#1B2A49',
+      color: 'white',
+      padding: '10px 20px',
+      borderRadius: '12px',
+      border: '2px solid #8DC63F',
+      fontWeight: 'bold',
+      fontSize: '12px',
+      cursor: 'pointer',
+      boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
+    }}
+  >
+    🏠 MENU PRINCIPAL
+  </button>
+
+  <div className="max-w-7xl mx-auto w-full space-y-12">
           
           <header className="flex flex-col items-center">
             <div className={`w-full max-w-3xl rounded-[3rem] border-4 flex flex-col justify-center items-center p-8 transition-all shadow-xl 
