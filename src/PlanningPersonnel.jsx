@@ -151,32 +151,27 @@ const PlanningPersonnel = ({ onNavigate }) => {
   };
 
   const exportToCSV = () => {
-    let csv = "--- EXPORT GLOBAL PONEY CLUB 2026 ---\n";
-    csv += "Nom,Role,Quota,Pris,Solde,Jours Travailles Reels\n";
+    let csv = "DATE;TOTAL PRESENTS;NOMS PRESENTS;ABSENTS (MOTIF)\n";
     
-    membresBase.forEach(m => {
-      const stats = getEmployeeStats(m.id, m.quotaVacances, m.planning);
-      let travailReel = 0;
-      let d = new Date('2026-01-01');
-      while(d.getFullYear() === 2026) {
-        const dStr = d.toLocaleDateString('en-CA');
-        const nomJ = JOURS_SEMAINE[d.getDay() === 0 ? 6 : d.getDay() - 1];
-        const shift = m.planning?.[nomJ] || 'repos';
-        const weight = SHIFT_TYPES[shift]?.weight || 0;
-        if (weight > 0) {
-            const abs = stats.empConges.find(c => c.date === dStr);
-            if (!abs) travailReel += weight;
-            else if (abs.periode !== 'jour') travailReel += 0.5;
-        }
-        d.setDate(d.getDate() + 1);
-      }
-      csv += `${m.nom},${m.role},${m.quotaVacances},${stats.pris},${stats.solde},${travailReel}\n`;
-    });
+    let d = new Date('2026-01-01');
+    while(d.getFullYear() === 2026) {
+      const dStr = d.toLocaleDateString('en-CA');
+      const pres = getDayPresence(dStr);
+      
+      const presentsNoms = [...pres.scheduled, ...pres.ponctuel].map(p => p.nom).join(", ");
+      const absentsNoms = pres.absentsPlanifies.map(a => `${a.nom} (${a.type})`).join(", ");
+      const maladesNoms = pres.malades.map(m => `${m.nom} (Maladie)`).join(", ");
+      
+      const tousAbsents = [absentsNoms, maladesNoms].filter(x => x !== "").join(" / ");
+
+      csv += `${dStr};${pres.total};"${presentsNoms}";"${tousAbsents}"\n`;
+      d.setDate(d.getDate() + 1);
+    }
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `Export_Poney_Club_2026.csv`;
+    link.download = `Registre_Presences_Poney_2026.csv`;
     link.click();
   };
 
@@ -271,9 +266,17 @@ const PlanningPersonnel = ({ onNavigate }) => {
                     <h4 className="text-[10px] opacity-40 uppercase font-black tracking-widest mb-3 border-b border-white/10 pb-1">{role}s</h4>
                     {mm.map(m => {
                       const stats = getEmployeeStats(m.id, m.quotaVacances, m.planning);
+                      const isPalefrenier = m.role === "Palefrenier";
                       return (
                         <div key={m.id} onClick={() => { setFiltreEmploye(filtreEmploye === m.id ? null : m.id); setIsSidebarOpen(false); }} className={`p-3 rounded-xl mb-2 cursor-pointer transition-all ${filtreEmploye === m.id ? 'bg-[#8DC63F] text-[#1B2A49]' : 'bg-[#213459]'}`}>
-                          <div className="flex justify-between items-start mb-1"><span className="block">{m.nom}</span>{m.role !== "Aide ponctuel" && (<span className={`text-[9px] px-1.5 py-0.5 rounded font-black ${stats.solde < 5 ? 'bg-red-500 text-white' : 'bg-white/20'}`}>{stats.solde}j</span>)}</div>
+                          <div className="flex justify-between items-start mb-1">
+                            <span className="block">{m.nom}</span>
+                            {isPalefrenier && (
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded font-black ${stats.solde < 5 ? 'bg-red-500 text-white' : 'bg-white/20'}`}>
+                                {stats.solde}j
+                              </span>
+                            )}
+                          </div>
                           {m.role !== "Aide ponctuel" && (<div className="flex gap-1 font-mono text-[9px] uppercase">{JOURS_SEMAINE.map((j, i) => <span key={i} className={m.planning?.[j] === 'repos' ? "text-red-400" : "text-green-400"}>{j[0]}</span>)}</div>)}
                         </div>
                       );
@@ -358,7 +361,7 @@ const PlanningPersonnel = ({ onNavigate }) => {
             <h2 className="font-black uppercase mb-4">Code Export</h2>
             <form onSubmit={(e) => { e.preventDefault(); if (exportPinInput === PIN_EXPORT) { exportToCSV(); setModalExportPinOpen(false); setExportPinInput(""); } else { alert("Code incorrect"); } }} className="space-y-4">
               <input autoFocus type="password" placeholder="PIN" className="w-full text-center text-3xl border-b-4 border-cyan-600 p-3 outline-none font-black" value={exportPinInput} onChange={e => setExportPinInput(e.target.value)} />
-              <button type="submit" className="w-full py-4 bg-cyan-600 text-white rounded-xl font-bold uppercase text-xs">Télécharger CSV</button>
+              <button type="submit" className="w-full py-4 bg-cyan-600 text-white rounded-xl font-bold uppercase text-xs">Télécharger Registre</button>
             </form>
             <button onClick={() => setModalExportPinOpen(false)} className="mt-4 text-gray-400 text-xs">Annuler</button>
           </div>
