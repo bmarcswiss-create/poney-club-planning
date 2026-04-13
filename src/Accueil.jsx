@@ -1,75 +1,196 @@
-import React from 'react';
-import { Calendar, GraduationCap, ClipboardList, FileText, Phone } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Calendar, GraduationCap, Plus, X, CheckCircle2, Circle, Trash2, HeartPulse, DoorOpen, Ban, Phone, FileText } from 'lucide-react';
+import { supabase } from './supabaseClient';
 
 const LOGO_URL = "https://lnwvlyswsmtafyoepovq.supabase.co/storage/v1/object/public/logo/logo.png";
 
 const Accueil = ({ onNavigate }) => {
-  // On récupère la date du jour pour les tâches automatiques
-  const dateInfo = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date());
+  const [consignes, setConsignes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [isAdminOpen, setIsAdminOpen] = useState(false);
+  
+  const [newTexte, setNewTexte] = useState('');
+  const [selectedDay, setSelectedDay] = useState('');
+  const [selectedSection, setSelectedSection] = useState('Sortie');
+
+  const joursSemaine = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+  const jourActuel = joursSemaine[new Date().getDay()];
+
+  const dateInfo = new Intl.DateTimeFormat('fr-FR', { 
+    weekday: 'long', day: 'numeric', month: 'long' 
+  }).format(new Date());
+
+  useEffect(() => {
+    fetchConsignes();
+  }, []);
+
+  const fetchConsignes = async () => {
+    setLoading(true);
+    const { data, error } = await supabase.from('consignes').select('*').order('created_at', { ascending: false });
+    if (!error && data) setConsignes(data);
+    setLoading(false);
+  };
+
+  const toggleTache = async (id, etatActuel, isToday) => {
+    if (!isToday) return;
+    const { error } = await supabase.from('consignes').update({ est_fait: !etatActuel }).eq('id', id);
+    if (!error) fetchConsignes();
+  };
+
+  const supprimerTache = async (id) => {
+    if (window.confirm("Supprimer cette fiche ?")) {
+      const { error } = await supabase.from('consignes').delete().eq('id', id);
+      if (!error) setConsignes(consignes.filter(t => t.id !== id));
+    }
+  };
+
+  const ajouterTache = async () => {
+    if (!newTexte.trim()) return;
+    const { data, error } = await supabase.from('consignes').insert([{ 
+      texte: newTexte, 
+      section: selectedSection,
+      jour_semaine: selectedDay || null,
+      est_fait: false
+    }]).select();
+
+    if (!error) {
+      setConsignes([data[0], ...consignes]);
+      setNewTexte('');
+      setIsAdminOpen(false);
+    }
+  };
+
+  const RenderSection = ({ title, icon: Icon, colorClass }) => {
+    const sectionTasks = consignes.filter(t => t.section === title);
+    
+    return (
+      <div className="mb-10 last:mb-20">
+        <h3 className={`flex items-center gap-2 font-black text-[11px] uppercase tracking-[0.2em] mb-4 ml-2 ${colorClass}`}>
+          <Icon size={16} /> {title === 'Sortie' ? 'Chevaux à sortir' : title === 'Arret' ? 'Chevaux à l\'arrêt' : 'Chevaux en soins'}
+        </h3>
+        <div className="space-y-3">
+          {sectionTasks.length === 0 ? (
+            <p className="text-[10px] text-gray-300 italic ml-8">Aucun enregistrement</p>
+          ) : (
+            sectionTasks.map((t) => {
+              const isToday = !t.jour_semaine || t.jour_semaine === jourActuel;
+              return (
+                <div key={t.id} className={`flex items-center justify-between p-4 rounded-3xl border-2 transition-all shadow-sm ${isToday ? 'bg-white border-white' : 'bg-gray-100/50 border-transparent opacity-40'}`}>
+                  <div className="flex items-center gap-4 flex-1" onClick={() => toggleTache(t.id, t.est_fait, isToday)}>
+                    {isToday && (t.est_fait ? <CheckCircle2 className="text-[#8DC63F]" size={22} /> : <Circle className="text-gray-300" size={22} />)}
+                    <div className="flex flex-col">
+                      <span className={`text-[15px] font-bold leading-tight ${t.est_fait ? 'line-through text-gray-400' : 'text-[#1B2A49]'}`}>{t.texte}</span>
+                      {t.jour_semaine && <span className="text-[9px] font-black uppercase text-[#8DC63F] mt-0.5">{isToday ? "Aujourd'hui" : `Chaque ${t.jour_semaine}`}</span>}
+                    </div>
+                  </div>
+                  <button onClick={() => supprimerTache(t.id)} className="text-gray-200 hover:text-red-400 p-2 transition-colors"><Trash2 size={16} /></button>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    );
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center pb-10">
-      
-      {/* HEADER avec ton Logo */}
-      <header className="w-full bg-[#1B2A49] p-6 flex flex-col items-center shadow-lg">
-      <img 
-  src={LOGO_URL} 
-  alt="Logo" 
-  className="h-24 w-24 rounded-full border-4 border-[#8DC63F] object-cover shadow-md mb-2 bg-white" 
-/>
-        <h1 className="text-white font-black uppercase tracking-tighter text-xl">Espace Collaborateur</h1>
-        <p className="text-[#8DC63F] font-bold capitalize">{dateInfo}</p>
+    <div className="min-h-screen bg-[#F1F5F9] font-sans overflow-x-hidden">
+      {/* HEADER FIXE */}
+      <header className="fixed top-0 left-0 right-0 bg-[#1B2A49] z-40 px-6 pt-12 pb-8 rounded-b-[45px] shadow-2xl flex flex-col items-center">
+        <button onClick={() => setIsAdminOpen(true)} className="absolute top-6 right-6 bg-[#8DC63F] text-[#1B2A49] p-3.5 rounded-2xl shadow-lg active:scale-90 transition-all">
+          <Plus size={24} strokeWidth={3} />
+        </button>
+        <img src={LOGO_URL} alt="Logo" className="h-16 w-16 rounded-full border-4 border-[#8DC63F] object-cover mb-3 bg-white shadow-md" />
+        <h1 className="text-white font-black uppercase text-lg tracking-tighter">Espace Collaborateur</h1>
+        <p className="text-[#8DC63F] font-bold text-[10px] uppercase tracking-[0.2em] mt-1 opacity-90">{dateInfo}</p>
       </header>
 
-      <div className="w-full max-w-md p-4 space-y-6">
-        
-        {/* SECTION PRIORITÉS (Tâches du jour) */}
-        <section className="bg-white rounded-3xl p-6 shadow-sm border-l-8 border-[#8DC63F]">
-          <h2 className="text-[#1B2A49] font-black uppercase text-sm mb-4 flex items-center">
-            <ClipboardList className="mr-2" size={18} /> À faire aujourd'hui
-          </h2>
-          <ul className="space-y-3">
-            <li className="flex items-center text-gray-700 font-medium">
-              <span className="w-2 h-2 bg-red-500 rounded-full mr-3"></span>
-              Vérification des abreuvoirs
-            </li>
-            <li className="flex items-center text-gray-700 font-medium">
-              <span className="w-2 h-2 bg-[#8DC63F] rounded-full mr-3"></span>
-              Sortie Poneys (Grand Manège)
-            </li>
-          </ul>
-        </section>
-
-        {/* GRILLE DU MENU PRINCIPAL */}
-        <div className="grid grid-cols-2 gap-4">
-          
-          <button 
-            onClick={() => onNavigate('planning-ecurie')}
-            className="bg-white p-6 rounded-3xl shadow-sm flex flex-col items-center border-2 border-transparent hover:border-[#8DC63F] transition-all">
-            <Calendar className="text-[#1B2A49] mb-3" size={32} />
-            <span className="text-[#1B2A49] font-black text-[10px] uppercase">Planning Écurie</span>
+      {/* CONTENU PRINCIPAL (AVEC MARGE HAUTE POUR LE HEADER) */}
+      <main className="w-full max-w-md mx-auto px-6 pt-64 pb-32">
+        {/* BOUTONS RAPIDES */}
+        <div className="grid grid-cols-2 gap-4 mb-8">
+          <button onClick={() => onNavigate('urgences')} className="bg-white p-4 rounded-3xl shadow-sm border border-red-50 flex items-center justify-center gap-3 active:scale-95 transition-all">
+            <div className="bg-red-500 p-2 rounded-xl text-white"><Phone size={18} /></div>
+            <span className="text-[10px] font-black uppercase text-[#1B2A49]">Urgences</span>
           </button>
-
-          <button 
-            onClick={() => onNavigate('planning-monitrices')}
-            className="bg-white p-6 rounded-3xl shadow-sm flex flex-col items-center border-2 border-transparent hover:border-[#8DC63F] transition-all">
-            <GraduationCap className="text-[#1B2A49] mb-3" size={32} />
-            <span className="text-[#1B2A49] font-black text-[10px] uppercase">Monitrices</span>
+          <button onClick={() => onNavigate('documents')} className="bg-white p-4 rounded-3xl shadow-sm border border-blue-50 flex items-center justify-center gap-3 active:scale-95 transition-all">
+            <div className="bg-[#1B2A49] p-2 rounded-xl text-white"><FileText size={18} /></div>
+            <span className="text-[10px] font-black uppercase text-[#1B2A49]">Docs</span>
           </button>
-
-          <button className="bg-white p-6 rounded-3xl shadow-sm flex flex-col items-center opacity-60">
-            <FileText className="text-[#1B2A49] mb-3" size={32} />
-            <span className="text-[#1B2A49] font-black text-[10px] uppercase">Documents</span>
-          </button>
-
-          <button className="bg-white p-6 rounded-3xl shadow-sm flex flex-col items-center opacity-60">
-            <Phone className="text-red-500 mb-3" size={32} />
-            <span className="text-[#1B2A49] font-black text-[10px] uppercase">Urgences</span>
-          </button>
-
         </div>
 
-      </div>
+        {loading ? (
+          <div className="flex justify-center p-20 text-gray-300 animate-pulse font-black uppercase text-[10px] tracking-widest">Synchronisation...</div>
+        ) : (
+          <div className="animate-in fade-in duration-700">
+            <RenderSection title="Sortie" icon={DoorOpen} colorClass="text-blue-500" />
+            <RenderSection title="Arret" icon={Ban} colorClass="text-orange-500" />
+            <RenderSection title="Soins" icon={HeartPulse} colorClass="text-red-500" />
+          </div>
+        )}
+      </main>
+
+      {/* MODAL ADMIN (FIXE ET AU-DESSUS) */}
+      {isAdminOpen && (
+        <div className="fixed inset-0 bg-[#1B2A49]/95 z-50 flex items-end justify-center px-4 backdrop-blur-md">
+          <div className="bg-white w-full max-w-md rounded-t-[40px] p-8 pb-12 shadow-2xl animate-in slide-in-from-bottom duration-300">
+            <div className="flex justify-between items-center mb-8">
+              <h2 className="font-black text-2xl uppercase text-[#1B2A49] tracking-tighter">Nouvelle Fiche</h2>
+              <button onClick={() => setIsAdminOpen(false)} className="bg-gray-100 p-2 rounded-full text-gray-400"><X size={20}/></button>
+            </div>
+            
+            <div className="space-y-6">
+              <div>
+                <label className="text-[9px] font-black text-gray-400 uppercase ml-2 tracking-widest">Nom / Consigne</label>
+                <input type="text" value={newTexte} onChange={(e) => setNewTexte(e.target.value)} placeholder="Ex: Tornado" className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 mt-1 outline-none focus:border-[#8DC63F] font-bold text-[#1B2A49]" />
+              </div>
+
+              <div>
+                <label className="text-[9px] font-black text-gray-400 uppercase ml-2 tracking-widest">Section</label>
+                <div className="grid grid-cols-3 gap-2 mt-1">
+                  {['Sortie', 'Arret', 'Soins'].map(s => (
+                    <button key={s} onClick={() => setSelectedSection(s)} className={`py-4 rounded-xl text-[9px] font-black uppercase transition-all ${selectedSection === s ? 'bg-[#1B2A49] text-white' : 'bg-gray-100 text-gray-400'}`}>
+                      {s === 'Arret' ? "Arrêt" : s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[9px] font-black text-gray-400 uppercase ml-2 tracking-widest">Fréquence</label>
+                <select value={selectedDay} onChange={(e) => setSelectedDay(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 mt-1 text-sm outline-none font-bold text-[#1B2A49]">
+                  <option value="">Aujourd'hui uniquement</option>
+                  {joursSemaine.map(j => <option key={j} value={j}>Chaque {j}</option>)}
+                </select>
+              </div>
+              
+              <button onClick={ajouterTache} className="w-full bg-[#8DC63F] text-[#1B2A49] py-5 rounded-3xl font-black uppercase tracking-[0.2em] shadow-lg mt-4 active:scale-95 transition-all">
+                Enregistrer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BARRE NAVIGATION BASSE FIXE */}
+      <footer className="fixed bottom-0 left-0 right-0 p-8 z-40 pointer-events-none">
+        <div className="max-w-xs mx-auto flex items-center justify-around bg-[#1B2A49] p-4 rounded-[32px] shadow-2xl border border-white/10 backdrop-blur-lg pointer-events-auto">
+          <button onClick={() => onNavigate('accueil')} className="flex flex-col items-center text-[#8DC63F] flex-1">
+            <DoorOpen size={20} />
+            <span className="text-[7px] font-black uppercase mt-1 tracking-widest">Board</span>
+          </button>
+          <div className="h-6 w-[1px] bg-white/10"></div>
+          <button onClick={() => onNavigate('planning-ecurie')} className="flex flex-col items-center text-white/40 flex-1">
+            <Calendar size={20} />
+            <span className="text-[7px] font-black uppercase mt-1 tracking-widest">Écurie</span>
+          </button>
+          <div className="h-6 w-[1px] bg-white/10"></div>
+          <button onClick={() => onNavigate('planning-monitrices')} className="flex flex-col items-center text-white/40 flex-1">
+            <GraduationCap size={20} />
+            <span className="text-[7px] font-black uppercase mt-1 tracking-widest">Cours</span>
+          </button>
+        </div>
+      </footer>
     </div>
   );
 };
