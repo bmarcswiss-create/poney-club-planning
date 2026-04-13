@@ -211,8 +211,8 @@ const PlanningPersonnel = ({ onNavigate }) => {
               const isAlerte = pres.total < 4;
               return (
                 <div key={dStr} onClick={() => { setSelectedDate(dStr); setModalChoiceOpen(dStr); }}
-                  className={`aspect-square min-h-[35px] rounded-xl flex items-center justify-center relative cursor-pointer overflow-hidden transition-all border border-transparent
-                  ${isAlerte ? 'bg-red-600' : isToday ? 'bg-amber-100 border-orange-500 ring-2 ring-orange-500/30 z-10' : 'bg-[#F4F6F9]'}`}>
+                  className={`aspect-square min-h-[35px] rounded-xl flex items-center justify-center relative cursor-pointer overflow-hidden transition-all
+                  ${isAlerte ? 'bg-red-600 border border-transparent' : isToday ? 'bg-amber-50 border-4 border-orange-600 z-10' : 'bg-[#F4F6F9] border border-transparent'}`}>
                   {absVis.length > 0 && !isAlerte && (
                     <div className="absolute inset-0 flex flex-col">
                       {[0, 1].map(h => {
@@ -345,7 +345,7 @@ const PlanningPersonnel = ({ onNavigate }) => {
             <div className="flex items-center gap-2 text-orange-500 uppercase font-black">🤒 Maladie</div>
             <div className="flex items-center gap-2 text-indigo-600 font-black">🎓 Formation</div>
             <div className="flex items-center gap-2 text-[#1B2A49] font-black">🏢 Validée</div>
-            <div className="flex items-center gap-2 text-[#1B2A49]"><div className="w-4 h-4 rounded shadow-sm" style={{ background: `repeating-linear-gradient(45deg, #15803d, #15803d 2px, #1B2A49 2px, #1B2A49 4px)` }}></div> Provisoire</div>
+            <div className="flex items-center gap-2 text-[#1B2A49]"><div className="w-4 h-4 rounded shadow-sm" style={{ background: `repeating-linear-gradient(45deg, #15803d, #15803d 2.5px, #1B2A49 2.5px, #1B2A49 5px)` }}></div> Provisoire</div>
             <div className="flex items-center gap-2 text-purple-600 font-black">📅 Fériés</div>
           </div>
         </div>
