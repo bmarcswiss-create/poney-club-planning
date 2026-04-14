@@ -143,7 +143,7 @@ const PlanningPersonnel = ({ onNavigate }) => {
     return { total: scheduled.length + ponctuel.length, scheduled, ponctuel, malades, absentsPlanifies };
   };
 
-  const getEmployeeStats = (employeeId, quota, mPlanning) => {
+  const getEmployeeStats = (employeeId, quota) => {
     const empConges = (conges || []).filter(c => String(c.userId) === String(employeeId));
     const pris = empConges.filter(c => c.category === 'conge').reduce((acc, curr) => acc + (curr.periode === 'jour' ? 1 : 0.5), 0);
     const solde = (quota || 25) - pris;
@@ -152,22 +152,17 @@ const PlanningPersonnel = ({ onNavigate }) => {
 
   const exportToCSV = () => {
     let csv = "DATE;TOTAL PRESENTS;NOMS PRESENTS;ABSENTS (MOTIF)\n";
-    
     let d = new Date('2026-01-01');
     while(d.getFullYear() === 2026) {
       const dStr = d.toLocaleDateString('en-CA');
       const pres = getDayPresence(dStr);
-      
       const presentsNoms = [...pres.scheduled, ...pres.ponctuel].map(p => p.nom).join(", ");
       const absentsNoms = pres.absentsPlanifies.map(a => `${a.nom} (${a.type})`).join(", ");
       const maladesNoms = pres.malades.map(m => `${m.nom} (Maladie)`).join(", ");
-      
       const tousAbsents = [absentsNoms, maladesNoms].filter(x => x !== "").join(" / ");
-
       csv += `${dStr};${pres.total};"${presentsNoms}";"${tousAbsents}"\n`;
       d.setDate(d.getDate() + 1);
     }
-
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
@@ -177,7 +172,6 @@ const PlanningPersonnel = ({ onNavigate }) => {
 
   const calendrierRender = useMemo(() => {
     if (!isLoaded) return null;
-    
     const nomsMois = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
     const moisActuelIdx = new Date().getMonth();
     const tousLesMoisIdx = Array.from({ length: 12 }, (_, i) => i);
@@ -237,7 +231,6 @@ const PlanningPersonnel = ({ onNavigate }) => {
 
   return (
     <div className="flex h-screen bg-[#F2F2F7] text-[#1B2A49] overflow-hidden font-sans">
-      
       <div className="lg:hidden fixed top-4 left-4 z-[100]"><button onClick={() => setIsSidebarOpen(true)} className="p-3 bg-[#1B2A49] text-white rounded-full shadow-xl"><Menu size={24} /></button></div>
       {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-[110] lg:hidden" onClick={() => setIsSidebarOpen(false)}></div>}
       
@@ -265,13 +258,12 @@ const PlanningPersonnel = ({ onNavigate }) => {
                   <div key={role}>
                     <h4 className="text-[10px] opacity-40 uppercase font-black tracking-widest mb-3 border-b border-white/10 pb-1">{role}s</h4>
                     {mm.map(m => {
-                      const stats = getEmployeeStats(m.id, m.quotaVacances, m.planning);
-                      const isPalefrenier = m.role === "Palefrenier";
+                      const stats = getEmployeeStats(m.id, m.quotaVacances);
                       return (
                         <div key={m.id} onClick={() => { setFiltreEmploye(filtreEmploye === m.id ? null : m.id); setIsSidebarOpen(false); }} className={`p-3 rounded-xl mb-2 cursor-pointer transition-all ${filtreEmploye === m.id ? 'bg-[#8DC63F] text-[#1B2A49]' : 'bg-[#213459]'}`}>
                           <div className="flex justify-between items-start mb-1">
                             <span className="block">{m.nom}</span>
-                            {isPalefrenier && (
+                            {m.role === "Palefrenier" && (
                               <span className={`text-[9px] px-1.5 py-0.5 rounded font-black ${stats.solde < 5 ? 'bg-red-500 text-white' : 'bg-white/20'}`}>
                                 {stats.solde}j
                               </span>
@@ -290,36 +282,12 @@ const PlanningPersonnel = ({ onNavigate }) => {
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0 bg-[#F2F2F7] overflow-y-auto relative p-6 md:p-12 scrollbar-hide">
-  
-        <button 
-          onClick={() => onNavigate('accueil')}
-          style={{
-            position: 'fixed',
-            top: '20px',
-            right: '20px',
-            zIndex: 9999,
-            backgroundColor: '#1B2A49',
-            color: 'white',
-            padding: '10px 20px',
-            borderRadius: '12px',
-            border: '2px solid #8DC63F',
-            fontWeight: 'bold',
-            fontSize: '12px',
-            cursor: 'pointer',
-            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
-          }}
-        >
-          🏠 MENU PRINCIPAL
-        </button>
+        <button onClick={() => onNavigate('accueil')} style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 999, backgroundColor: '#1B2A49', color: 'white', padding: '10px 20px', borderRadius: '12px', border: '2px solid #8DC63F', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}>🏠 MENU PRINCIPAL</button>
 
         <div className="max-w-7xl mx-auto w-full space-y-12">
-          
           <header className="flex flex-col items-center">
             <div className={`w-full max-w-3xl rounded-[3rem] border-4 flex flex-col justify-center items-center p-8 transition-all shadow-xl 
-              ${getDayPresence(selectedDate).total < 4 
-                ? 'bg-red-600 text-white border-red-600 animate-pulse' 
-                : (selectedDate === todayStr ? 'bg-white border-orange-500 ring-8 ring-orange-50' : 'bg-white border-white')
-              }`}>
+              ${getDayPresence(selectedDate).total < 4 ? 'bg-red-600 text-white border-red-600 animate-pulse' : (selectedDate === todayStr ? 'bg-white border-orange-500 ring-8 ring-orange-50' : 'bg-white border-white')}`}>
               <h3 className="text-2xl font-black uppercase text-center mb-4 leading-tight tracking-tighter">{new Date(selectedDate).toLocaleDateString('fr-CH', {weekday:'long', day:'numeric', month:'long', year:'numeric'})}</h3>
               <div className="flex flex-col items-center w-full">
                   <div className="flex items-center gap-6 bg-[#1B2A49] px-8 py-4 rounded-full text-white shadow-2xl">
@@ -336,71 +304,45 @@ const PlanningPersonnel = ({ onNavigate }) => {
                         {getDayPresence(selectedDate).absentsPlanifies.length > 0 && (<div className="bg-gray-50 p-3 rounded-2xl border border-gray-100"><span className="text-[9px] font-black uppercase text-[#1B2A49] opacity-40 block mb-1">🏝️ Absences</span><div className="flex flex-wrap gap-2 text-[10px] font-bold text-[#1B2A49]">{getDayPresence(selectedDate).absentsPlanifies.map((a, i) => <span key={i}>{a.nom} {getCompactPeriod(a.periode)}</span>)}</div></div>)}
                      </div>
                      <div className="space-y-3">
-                        {(OFFICIAL_EVENTS_2026[selectedDate] || evenementsPerso[selectedDate] || notes[selectedDate]) && (<div className="bg-purple-50 p-3 rounded-2xl border border-purple-100 h-full"><span className="text-[9px] font-black uppercase opacity-40 block mb-1">Événements & Notes</span><div className="space-y-1.5">{OFFICIAL_EVENTS_2026[selectedDate]?.map((e, i) => <div key={i} className="text-[10px] font-black text-purple-700 uppercase flex items-center gap-1"><Info size={10}/> {e.titre}</div>)}{evenementsPerso[selectedDate]?.map((e, i) => <div key={i} className="text-[10px] font-black text-blue-700 uppercase flex items-center gap-1"><Calendar size={10}/> {e.titre}</div>)}{notes[selectedDate] && <div className="text-[10px] font-bold text-amber-700 italic border-t border-amber-100 pt-1 mt-1 flex items-start gap-1"><StickyNote size={10} className="shrink-0 mt-0.5"/> "{notes[selectedDate]}"</div>}</div></div>)}
-                     </div>{evenementsPerso[selectedDate]?.map((e, i) => (
-  <div key={i} className="text-[10px] font-black text-blue-700 uppercase flex items-center justify-between group">
-    <div className="flex items-center gap-1">
-      <Calendar size={10}/> {e.titre}
-    </div>
-    {isAdmin && (
-      <Trash2 
-        size={11} 
-        className="text-red-400 cursor-pointer hover:text-red-600 ml-2" 
-        onClick={async () => {
-          if(window.confirm("Supprimer cet événement ?")) {
-            const nx = { ...evenementsPerso };
-            nx[selectedDate] = nx[selectedDate].filter((_, idx) => idx !== i);
-            setEvenementsPerso(nx);
-            // On utilise ta fonction syncAll pour sauvegarder dans Supabase
-            await syncAll(membresBase, conges, notes, nx, manualPresence);
-          }
-        }}
-      />
-    )}
-  </div>
-))}
+                        {(OFFICIAL_EVENTS_2026[selectedDate] || evenementsPerso[selectedDate] || notes[selectedDate]) && (<div className="bg-purple-50 p-3 rounded-2xl border border-purple-100 h-full"><span className="text-[9px] font-black uppercase opacity-40 block mb-1">Événements & Notes</span><div className="space-y-1.5">{OFFICIAL_EVENTS_2026[selectedDate]?.map((e, i) => <div key={i} className="text-[10px] font-black text-purple-700 uppercase flex items-center gap-1"><Info size={10}/> {e.titre}</div>)}{evenementsPerso[selectedDate]?.map((e, i) => <div key={i} className="text-[10px] font-black text-blue-700 uppercase flex items-center gap-1 flex justify-between group"><span><Calendar size={10} className="inline mr-1"/> {e.titre}</span>{isAdmin && <Trash2 size={10} className="text-red-400 cursor-pointer opacity-0 group-hover:opacity-100" onClick={async () => { if(confirm("Supprimer ?")){ const nx={...evenementsPerso}; nx[selectedDate]=nx[selectedDate].filter((_,idx)=>idx!==i); setEvenementsPerso(nx); await syncAll(membresBase, conges, notes, nx, manualPresence); }}}/>}</div>)}{notes[selectedDate] && <div className="text-[10px] font-bold text-amber-700 italic border-t border-amber-100 pt-1 mt-1 flex items-start gap-1"><StickyNote size={10} className="shrink-0 mt-0.5"/> "{notes[selectedDate]}"</div>}</div></div>)}
+                     </div>
                   </div>
               </div>
             </div>
           </header>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-12">{calendrierRender}</div>
-          <div className="bg-white/80 backdrop-blur-md rounded-3xl p-6 border border-white flex flex-wrap justify-center gap-6 md:gap-10 text-[10px] font-black uppercase tracking-widest shadow-sm">
-            <div className="flex items-center gap-2 text-cyan-600 italic font-black"><CheckCircle2 size={16}/> Ponctuel</div>
-            <div className="flex items-center gap-2 text-orange-500 uppercase font-black">🤒 Maladie</div>
-            <div className="flex items-center gap-2 text-indigo-600 font-black">🎓 Formation</div>
-            <div className="flex items-center gap-2 text-[#1B2A49] font-black">🏢 Validée</div>
-            <div className="flex items-center gap-2 text-[#1B2A49]"><div className="w-4 h-4 rounded shadow-sm" style={{ background: `repeating-linear-gradient(45deg, #15803d, #15803d 2.5px, #1B2A49 2.5px, #1B2A49 5px)` }}></div> Provisoire</div>
-            <div className="flex items-center gap-2 text-purple-600 font-black">📅 Fériés</div>
-          </div>
         </div>
       </main>
 
-      {modalExportPinOpen && (
-        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[1000] p-4 text-[#1B2A49]">
-          <div className="bg-white rounded-3xl p-8 w-full max-w-sm text-center shadow-2xl border-b-[12px] border-cyan-600">
-            <ShieldCheck className="mx-auto mb-4 text-cyan-600" size={40} />
-            <h2 className="font-black uppercase mb-4">Code Export</h2>
-            <form onSubmit={(e) => { e.preventDefault(); if (exportPinInput === PIN_EXPORT) { exportToCSV(); setModalExportPinOpen(false); setExportPinInput(""); } else { alert("Code incorrect"); } }} className="space-y-4">
-              <input autoFocus type="password" placeholder="PIN" className="w-full text-center text-3xl border-b-4 border-cyan-600 p-3 outline-none font-black" value={exportPinInput} onChange={e => setExportPinInput(e.target.value)} />
-              <button type="submit" className="w-full py-4 bg-cyan-600 text-white rounded-xl font-bold uppercase text-xs">Télécharger Registre</button>
-            </form>
-            <button onClick={() => setModalExportPinOpen(false)} className="mt-4 text-gray-400 text-xs">Annuler</button>
-          </div>
-        </div>
-      )}
-
+      {/* MODALS */}
+      {modalPinOpen && (<div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[1000] p-4"><div className="bg-white rounded-3xl p-8 w-full max-w-sm text-center shadow-2xl border-b-[12px] border-black"><Lock className="mx-auto mb-4" size={40} /><form onSubmit={(e) => { e.preventDefault(); if (pinInput.toLowerCase() === PIN_ADMIN) { setIsAdmin(true); setModalPinOpen(false); setPinInput(""); } else { alert("Code incorrect"); } }} className="space-y-4"><input autoFocus type="password" placeholder="PIN" className="w-full text-center text-3xl border-b-4 border-black p-3 outline-none font-black" value={pinInput} onChange={e => setPinInput(e.target.value)} /><button type="submit" className="w-full py-4 bg-black text-white rounded-xl font-bold uppercase text-xs">Déverrouiller</button></form><button onClick={() => setModalPinOpen(false)} className="mt-4 text-gray-400 text-xs">Annuler</button></div></div>)}
       {modalChoiceOpen && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[500] p-4 text-[#1B2A49]">
           <div className="bg-white rounded-[2.5rem] w-full max-w-md p-6 space-y-6 border-t-8 border-[#8DC63F] shadow-2xl">
             <h4 className="font-black uppercase text-base border-b pb-2 text-center">{new Date(modalChoiceOpen).toLocaleDateString('fr-CH', {weekday:'long', day:'numeric', month:'long'})}</h4>
             <div className="grid grid-cols-2 gap-2 bg-gray-50 p-3 rounded-2xl max-h-40 overflow-y-auto">{membresBase.map(m => { const pres = getDayPresence(modalChoiceOpen); const isPresent = pres.scheduled.some(p => p.id === m.id) || pres.ponctuel.some(p => p.id === m.id); const isMalade = pres.malades.some(p => p.id === m.id); return (<label key={m.id} className={`flex items-center gap-2 p-2 hover:bg-white rounded transition-all cursor-pointer ${isMalade ? 'opacity-30' : ''}`}><input type="checkbox" disabled={isMalade} className="w-5 h-5 accent-[#8DC63F]" checked={isPresent} onChange={async () => { const dOver = manualPresence[modalChoiceOpen] || {}; const newMan = { ...manualPresence, [modalChoiceOpen]: { ...dOver, [m.id]: !isPresent } }; setManualPresence(newMan); await syncAll(membresBase, conges, notes, evenementsPerso, newMan); }} /><span className={`text-[11px] font-bold truncate ${isMalade ? 'line-through text-orange-600' : ''}`}>{m.nom}</span></label>) })}</div>
-            {isAdmin && congesParDate[modalChoiceOpen]?.length > 0 && (<div className="space-y-2 border-t pt-4"><span className="text-[9px] font-black uppercase opacity-40">Gérer les absences :</span><div className="space-y-2">{congesParDate[modalChoiceOpen].map((abs) => { const employe = membresBase.find(m => String(m.id) === String(abs.userId)); return (<div key={abs.id} className="flex flex-col bg-gray-100 p-3 rounded-xl gap-2"><div className="flex justify-between items-center"><span className="text-[11px] font-black">{employe?.nom} ({abs.category})</span><button onClick={async () => { const newC = conges.filter(c => c.id !== abs.id); setConges(newC); await syncAll(membresBase, newC, notes, evenementsPerso, manualPresence); }} className="text-red-500 p-1"><Trash2 size={14}/></button></div><div className="flex gap-2">{(abs.category === 'conge' || abs.category === 'formation') && (<button onClick={async () => { const newStat = abs.statut === 'provisoire' ? 'valide' : 'provisoire'; const newC = conges.map(c => c.id === abs.id ? {...c, statut: newStat} : c); setConges(newC); await syncAll(membresBase, newC, notes, evenementsPerso, manualPresence); }} className={`flex-1 py-1 rounded-lg text-[9px] font-black uppercase ${abs.statut === 'valide' ? 'bg-green-600 text-white' : 'bg-orange-400 text-white'}`}>{abs.statut === 'valide' ? 'Validé' : 'Provisoire'}</button>)}<select className="flex-1 bg-white border border-gray-200 rounded-lg text-[9px] font-bold p-1" value={abs.periode} onChange={async (e) => { const newC = conges.map(c => c.id === abs.id ? {...c, periode: e.target.value} : c); setConges(newC); await syncAll(membresBase, newC, notes, evenementsPerso, manualPresence); }}><option value="jour">Journée</option><option value="matin">Matin</option><option value="apres-midi">A-M</option></select></div></div>)})}</div></div>)}
+            {isAdmin && congesParDate[modalChoiceOpen]?.length > 0 && (<div className="space-y-2 border-t pt-4"><span className="text-[9px] font-black uppercase opacity-40">Absences enregistrées :</span><div className="space-y-2">{congesParDate[modalChoiceOpen].map((abs) => { const e = membresBase.find(m => String(m.id) === String(abs.userId)); return (<div key={abs.id} className="flex justify-between items-center bg-gray-100 p-2 rounded-lg"><span className="text-[10px] font-bold">{e?.nom} ({abs.category})</span><button onClick={async () => { if(confirm("Supprimer l'absence ?")){ const nC = conges.filter(c => c.id !== abs.id); setConges(nC); await syncAll(membresBase, nC, notes, evenementsPerso, manualPresence); }}} className="text-red-500"><Trash2 size={14}/></button></div>)})}</div></div>)}
             {isAdmin && (<div className="space-y-2 pt-2 border-t mt-2"><button onClick={() => { setFormData({ ...formData, dateDebut: modalChoiceOpen, dateFin: modalChoiceOpen, category: 'conge', statut: 'provisoire', periode: 'jour' }); setModalCongeOpen(true); setModalChoiceOpen(null); }} className="w-full py-4 bg-[#8DC63F] text-[#1B2A49] font-black rounded-2xl uppercase text-xs shadow-md">Ajouter Absence</button><div className="grid grid-cols-2 gap-2"><button onClick={() => { setModalEvtOpen(true); setModalChoiceOpen(null); }} className="bg-blue-600 text-white py-3 rounded-xl text-[10px] font-black uppercase">Event</button><button onClick={() => { setNoteText(notes[modalChoiceOpen] || ""); setModalNoteOpen(true); setModalChoiceOpen(null); }} className="bg-yellow-400 text-[#1B2A49] py-3 rounded-xl text-[10px] font-black uppercase">Post-it</button></div></div>)}
             <button onClick={() => setModalChoiceOpen(null)} className="w-full text-gray-400 font-bold text-xs uppercase py-2">Fermer</button>
           </div>
         </div>
       )}
-
+      {modalEvtOpen && (<div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[601] p-4 text-[#1B2A49]"><div className="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl relative text-center"><X className="absolute top-6 right-6 cursor-pointer text-gray-400" onClick={() => setModalEvtOpen(false)} size={20}/><h3 className="font-black uppercase mb-8 text-base tracking-tighter">Événement</h3><form onSubmit={async (e) => { e.preventDefault(); const nx = { ...evenementsPerso }; const date = evtForm.dateDebut; nx[date] = [...(nx[date] || []), { id: Date.now(), titre: evtForm.titre, type: evtForm.type }]; setEvenementsPerso(nx); setModalEvtOpen(false); await syncAll(membresBase, conges, notes, nx, manualPresence); }} className="space-y-4 text-left"><input type="date" className="w-full border-2 p-4 rounded-xl font-bold" value={evtForm.dateDebut} onChange={e => setEvtForm({...evtForm, dateDebut: e.target.value})}/><input type="text" className="w-full border-2 p-4 rounded-xl font-black" placeholder="Titre" value={evtForm.titre} onChange={e => setEvtForm({...evtForm, titre: e.target.value})} required/><button type="submit" className="w-full bg-[#1B2A49] text-white py-4 rounded-xl font-black uppercase text-xs shadow-md">Ajouter</button></form></div></div>)}
+      {modalNoteOpen && (<div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[601] p-4"><div className="bg-white rounded-[2rem] w-full max-w-sm overflow-hidden border-4 border-yellow-400 shadow-2xl text-center"><div className="p-4 bg-yellow-400 font-black flex justify-between uppercase text-[10px]">Note<X onClick={() => setModalNoteOpen(false)} size={18}/></div><form onSubmit={async (e) => { e.preventDefault(); const nx = { ...notes }; if (!noteText.trim()) delete nx[selectedDate]; else nx[selectedDate] = noteText; setNotes(nx); setModalNoteOpen(false); await syncAll(membresBase, conges, nx, evenementsPerso, manualPresence); }} className="p-6 space-y-4"><textarea autoFocus className="w-full border-2 p-5 rounded-2xl bg-yellow-50 outline-none h-40 font-bold" value={noteText} onChange={e => setNoteText(e.target.value)}/><button type="submit" className="w-full bg-yellow-400 text-[#1B2A49] font-black py-4 rounded-xl uppercase text-xs shadow-md">Enregistrer</button></form></div></div>)}
+      {modalCongeOpen && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[600] p-4 text-[#1B2A49]">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-md overflow-hidden shadow-2xl border-2 border-[#1B2A49]">
+            <div className="p-6 bg-[#1B2A49] text-white flex justify-between items-center font-black uppercase text-sm">Nouvelle Absence<X onClick={() => setModalCongeOpen(false)} size={20}/></div>
+            <form onSubmit={async (e) => { e.preventDefault(); const nC = [...conges]; const s = new Date(formData.dateDebut); const en = new Date(formData.dateFin || formData.dateDebut); for (let d = new Date(s); d <= en; d.setDate(d.getDate() + 1)) { nC.push({ id: Math.random(), userId: formData.userId, date: d.toLocaleDateString('en-CA'), category: formData.category, periode: formData.periode, statut: formData.statut }); } setConges(nC); setModalCongeOpen(false); await syncAll(membresBase, nC, notes, evenementsPerso, manualPresence); }} className="p-8 space-y-4">
+              <select className="w-full border-4 border-gray-50 p-5 rounded-2xl font-black" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}><option value="conge">🏝️ Vacances</option><option value="formation">🎓 Formation</option><option value="maladie">🤒 Maladie</option><option value="deplacement">✈️ Déplacement</option></select>
+              <select className="w-full border-4 border-gray-50 p-5 rounded-2xl font-black" value={formData.periode} onChange={e => setFormData({...formData, periode: e.target.value})}><option value="jour">☀️ Journée entière</option><option value="matin">🌅 Matin (0.5)</option><option value="apres-midi">🌇 Après-midi (0.5)</option></select>
+              <div className="grid grid-cols-2 gap-4"><input type="date" className="border-4 border-gray-50 p-5 rounded-2xl font-bold" value={formData.dateDebut} onChange={e => setFormData({...formData, dateDebut: e.target.value})} required/><input type="date" className="border-4 border-gray-50 p-5 rounded-2xl font-bold" value={formData.dateFin} onChange={e => setFormData({...formData, dateFin: e.target.value})}/></div>
+              <select className="w-full border-4 border-gray-50 p-5 rounded-2xl font-black" value={formData.userId} onChange={e => setFormData({...formData, userId: e.target.value})} required><option value="">-- Employé --</option>{membresBase.map(m => <option key={m.id} value={m.id}>{m.nom}</option>)}</select>
+              <button type="submit" className="w-full bg-[#1B2A49] text-white py-5 rounded-2xl font-black uppercase">Enregistrer</button>
+            </form>
+          </div>
+        </div>
+      )}
       {modalStaffOpen && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[600] p-4 text-[#1B2A49]">
           <div className="bg-white rounded-[2rem] w-full max-w-4xl overflow-hidden shadow-2xl">
@@ -418,25 +360,6 @@ const PlanningPersonnel = ({ onNavigate }) => {
           </div>
         </div>
       )}
-
-      {modalCongeOpen && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[600] p-4 text-[#1B2A49]">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-md overflow-hidden shadow-2xl border-2 border-[#1B2A49]">
-            <div className="p-6 bg-[#1B2A49] text-white flex justify-between items-center font-black uppercase text-sm">Nouvelle Absence<X onClick={() => setModalCongeOpen(false)} size={20}/></div>
-            <form onSubmit={async (e) => { e.preventDefault(); const nC = [...conges]; const s = new Date(formData.dateDebut); const en = new Date(formData.dateFin || formData.dateDebut); for (let d = new Date(s); d <= en; d.setDate(d.getDate() + 1)) { nC.push({ id: Math.random(), userId: formData.userId, date: d.toLocaleDateString('en-CA'), category: formData.category, periode: formData.periode, statut: formData.statut }); } setConges(nC); setModalCongeOpen(false); await syncAll(membresBase, nC, notes, evenementsPerso, manualPresence); }} className="p-8 space-y-4">
-              <select className="w-full border-4 border-gray-50 p-5 rounded-2xl font-black" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}><option value="conge">🏝️ Vacances</option><option value="formation">🎓 Formation</option><option value="maladie">🤒 Maladie</option><option value="deplacement">✈️ Déplacement</option></select>
-              <select className="w-full border-4 border-gray-50 p-5 rounded-2xl font-black" value={formData.periode} onChange={e => setFormData({...formData, periode: e.target.value})}><option value="jour">☀️ Journée entière</option><option value="matin">🌅 Matin (0.5)</option><option value="apres-midi">🌇 Après-midi (0.5)</option></select>
-              <div className="grid grid-cols-2 gap-4"><input type="date" className="border-4 border-gray-50 p-5 rounded-2xl font-bold" value={formData.dateDebut} onChange={e => setFormData({...formData, dateDebut: e.target.value})} required/><input type="date" className="border-4 border-gray-50 p-5 rounded-2xl font-bold" value={formData.dateFin} onChange={e => setFormData({...formData, dateFin: e.target.value})}/></div>
-              <select className="w-full border-4 border-gray-50 p-5 rounded-2xl font-black" value={formData.userId} onChange={e => setFormData({...formData, userId: e.target.value})} required><option value="">-- Employé --</option>{membresBase.map(m => <option key={m.id} value={m.id}>{m.nom}</option>)}</select>
-              <button type="submit" className="w-full bg-[#1B2A49] text-white py-5 rounded-2xl font-black uppercase">Enregistrer</button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {modalPinOpen && (<div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[1000] p-4"><div className="bg-white rounded-3xl p-8 w-full max-w-sm text-center shadow-2xl border-b-[12px] border-black"><Lock className="mx-auto mb-4" size={40} /><form onSubmit={(e) => { e.preventDefault(); if (pinInput.toLowerCase() === PIN_ADMIN) { setIsAdmin(true); setModalPinOpen(false); setPinInput(""); } else { alert("Code incorrect"); } }} className="space-y-4"><input autoFocus type="password" placeholder="PIN" className="w-full text-center text-3xl border-b-4 border-black p-3 outline-none font-black" value={pinInput} onChange={e => setPinInput(e.target.value)} /><button type="submit" className="w-full py-4 bg-black text-white rounded-xl font-bold uppercase text-xs">Déverrouiller</button></form><button onClick={() => setModalPinOpen(false)} className="mt-4 text-gray-400 text-xs">Annuler</button></div></div>)}
-      {modalNoteOpen && (<div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[601] p-4"><div className="bg-white rounded-[2rem] w-full max-w-sm overflow-hidden border-4 border-yellow-400 shadow-2xl text-center"><div className="p-4 bg-yellow-400 font-black flex justify-between uppercase text-[10px]">Note<X onClick={() => setModalNoteOpen(false)} size={18}/></div><form onSubmit={async (e) => { e.preventDefault(); const nx = { ...notes }; if (!noteText.trim()) delete nx[selectedDate]; else nx[selectedDate] = noteText; setNotes(nx); setModalNoteOpen(false); await syncAll(membresBase, conges, nx, evenementsPerso, manualPresence); }} className="p-6 space-y-4"><textarea autoFocus className="w-full border-2 p-5 rounded-2xl bg-yellow-50 outline-none h-40 font-bold" value={noteText} onChange={e => setNoteText(e.target.value)}/><button type="submit" className="w-full bg-yellow-400 text-[#1B2A49] font-black py-4 rounded-xl uppercase text-xs shadow-md">Enregistrer</button></form></div></div>)}
-      {modalEvtOpen && (<div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[601] p-4 text-[#1B2A49]"><div className="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl relative text-center"><X className="absolute top-6 right-6 cursor-pointer text-gray-400" onClick={() => setModalEvtOpen(false)} size={20}/><h3 className="font-black uppercase mb-8 text-base tracking-tighter">Événement</h3><form onSubmit={async (e) => { e.preventDefault(); const nx = { ...evenementsPerso }; const date = evtForm.dateDebut; nx[date] = [...(nx[date] || []), { id: Date.now(), titre: evtForm.titre, type: evtForm.type }]; setEvenementsPerso(nx); setModalEvtOpen(false); await syncAll(membresBase, conges, notes, nx, manualPresence); }} className="space-y-4 text-left"><input type="date" className="w-full border-2 p-4 rounded-xl font-bold" value={evtForm.dateDebut} onChange={e => setEvtForm({...evtForm, dateDebut: e.target.value})}/><input type="text" className="w-full border-2 p-4 rounded-xl font-black" placeholder="Titre" value={evtForm.titre} onChange={e => setEvtForm({...evtForm, titre: e.target.value})} required/><button type="submit" className="w-full bg-[#1B2A49] text-white py-4 rounded-xl font-black uppercase text-xs shadow-md">Ajouter</button></form></div></div>)}
     </div>
   );
 }

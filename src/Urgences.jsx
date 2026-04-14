@@ -17,6 +17,7 @@ const Urgences = ({ onNavigate }) => {
   }, []);
 
   const fetchUrgences = async () => {
+    setLoading(true);
     const { data, error } = await supabase
       .from('urgences')
       .select('*')
@@ -57,15 +58,11 @@ const Urgences = ({ onNavigate }) => {
   ];
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] pb-32">
-      {/* Header Alerte */}
+    <div className="min-h-screen bg-[#F8FAFC] pb-40">
+      {/* Header Alerte - BOUTON PLUS SUPPRIMÉ D'ICI */}
       <header className="bg-red-600 px-6 pt-12 pb-10 rounded-b-[45px] shadow-xl flex flex-col items-center relative text-white">
         <button onClick={() => onNavigate('accueil')} className="absolute top-8 left-6 bg-white/20 p-2 rounded-xl active:scale-90 transition-all">
           <ArrowLeft size={20} />
-        </button>
-        
-        <button onClick={() => setIsAdminOpen(true)} className="absolute top-8 right-6 bg-white text-red-600 p-2 rounded-xl shadow-lg active:scale-90 transition-all">
-          <Plus size={20} strokeWidth={3} />
         </button>
 
         <ShieldAlert size={36} className="mb-2" />
@@ -82,64 +79,75 @@ const Urgences = ({ onNavigate }) => {
             <button onClick={() => setIsAdminOpen(true)} className="text-red-500 font-bold text-xs uppercase mt-2 underline">Ajouter le premier</button>
           </div>
         ) : (
-          categories.map(cat => {
-            const list = contacts.filter(c => c.categorie === cat.id);
-            if (list.length === 0) return null;
+          <>
+            {categories.map(cat => {
+              const list = contacts.filter(c => c.categorie === cat.id);
+              if (list.length === 0) return null;
 
-            return (
-              <div key={cat.id} className="mb-10">
-                <h3 className="flex items-center gap-2 font-black text-[11px] uppercase tracking-[0.2em] text-gray-400 mb-5 ml-2">
-                  <cat.icon size={16} className="text-red-500" /> {cat.id}s
-                </h3>
-                <div className="space-y-4">
-                  {list.map(contact => (
-                    <div key={contact.id} className="group relative">
-                      <a 
-                        href={`tel:${contact.numero}`}
-                        className="bg-white p-5 rounded-[32px] shadow-sm border border-gray-100 flex items-center justify-between active:scale-95 transition-all"
-                      >
-                        <div className="flex flex-col">
-                          <span className="font-black text-[#1B2A49] text-base leading-tight">{contact.nom}</span>
-                          <span className="text-gray-400 font-bold text-xs mt-1">{contact.numero}</span>
-                        </div>
-                        <div className={`${cat.color} p-4 rounded-2xl text-white shadow-lg`}>
-                          <Phone size={22} fill="currentColor" />
-                        </div>
-                      </a>
-                      {/* Bouton supprimer discret au-dessus */}
-                      <button 
-                        onClick={(e) => { e.preventDefault(); supprimerContact(contact.id); }}
-                        className="absolute -top-2 -right-2 bg-gray-100 text-gray-400 p-1.5 rounded-full hover:bg-red-100 hover:text-red-500 transition-colors"
-                      >
-                        <X size={12} strokeWidth={3} />
-                      </button>
-                    </div>
-                  ))}
+              return (
+                <div key={cat.id} className="mb-10 text-left">
+                  <h3 className="flex items-center gap-2 font-black text-[11px] uppercase tracking-[0.2em] text-gray-400 mb-5 ml-2">
+                    <cat.icon size={16} className="text-red-500" /> {cat.id}s
+                  </h3>
+                  <div className="space-y-4">
+                    {list.map(contact => (
+                      <div key={contact.id} className="group relative">
+                        <a 
+                          href={`tel:${contact.numero}`}
+                          className="bg-white p-5 rounded-[32px] shadow-sm border border-gray-100 flex items-center justify-between active:scale-95 transition-all"
+                        >
+                          <div className="flex flex-col">
+                            <span className="font-black text-[#1B2A49] text-base leading-tight">{contact.nom}</span>
+                            <span className="text-gray-400 font-bold text-xs mt-1">{contact.numero}</span>
+                          </div>
+                          <div className={`${cat.color} p-4 rounded-2xl text-white shadow-lg`}>
+                            <Phone size={22} fill="currentColor" />
+                          </div>
+                        </a>
+                        <button 
+                          onClick={(e) => { e.preventDefault(); supprimerContact(contact.id); }}
+                          className="absolute -top-2 -right-2 bg-white text-gray-400 p-1.5 rounded-full shadow-sm hover:text-red-500 transition-colors"
+                        >
+                          <X size={12} strokeWidth={3} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            );
-          })
+              );
+            })}
+
+            {/* BOUTON AJOUTER - PLACÉ À LA FIN DE LA LISTE COMME À L'ORIGINE */}
+            <div className="flex justify-center mt-4">
+              <button 
+                onClick={() => setIsAdminOpen(true)}
+                className="flex items-center gap-2 bg-white text-red-600 px-6 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-sm border border-red-100 active:scale-95 transition-all"
+              >
+                <Plus size={16} strokeWidth={3} /> Ajouter un contact
+              </button>
+            </div>
+          </>
         )}
       </main>
 
-      {/* Modal d'ajout de contact */}
+      {/* Modal d'ajout de contact - Centrée */}
       {isAdminOpen && (
-        <div className="fixed inset-0 bg-[#1B2A49]/95 z-50 flex items-end justify-center px-4 backdrop-blur-md">
-          <div className="bg-white w-full max-w-md rounded-t-[40px] p-8 pb-12 shadow-2xl animate-in slide-in-from-bottom duration-300">
+        <div className="fixed inset-0 bg-[#1B2A49]/95 z-50 flex items-center justify-center px-4 backdrop-blur-md">
+          <div className="bg-white w-full max-w-md rounded-[40px] p-8 shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center mb-8">
               <h2 className="font-black text-2xl uppercase text-[#1B2A49] tracking-tighter">Nouveau Contact</h2>
               <button onClick={() => setIsAdminOpen(false)} className="bg-gray-100 p-2 rounded-full text-gray-400"><X size={20}/></button>
             </div>
             
-            <div className="space-y-6">
+            <div className="space-y-6 text-left">
               <div>
-                <label className="text-[9px] font-black text-gray-400 uppercase ml-2 tracking-widest">Nom du contact / Clinique</label>
+                <label className="text-[9px] font-black text-gray-400 uppercase ml-2 tracking-widest">Nom / Clinique</label>
                 <input type="text" value={newNom} onChange={(e) => setNewNom(e.target.value)} placeholder="Ex: Dr. Martin" className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 mt-1 outline-none focus:border-red-500 font-bold text-[#1B2A49]" />
               </div>
 
               <div>
-                <label className="text-[9px] font-black text-gray-400 uppercase ml-2 tracking-widest">Numéro de téléphone</label>
-                <input type="tel" value={newNumero} onChange={(e) => setNewNumero(e.target.value)} placeholder="Ex: 06 12 34 56 78" className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 mt-1 outline-none focus:border-red-500 font-bold text-[#1B2A49]" />
+                <label className="text-[9px] font-black text-gray-400 uppercase ml-2 tracking-widest">Numéro</label>
+                <input type="tel" value={newNumero} onChange={(e) => setNewNumero(e.target.value)} placeholder="079..." className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 mt-1 outline-none focus:border-red-500 font-bold text-[#1B2A49]" />
               </div>
 
               <div>
@@ -162,10 +170,10 @@ const Urgences = ({ onNavigate }) => {
       )}
 
       {/* Navigation basse */}
-      <footer className="fixed bottom-8 left-0 right-0 p-8 z-40 pointer-events-none">
+      <footer className="fixed bottom-8 left-0 right-0 p-8 z-40 flex justify-center pointer-events-none">
         <button 
           onClick={() => onNavigate('accueil')}
-          className="max-w-[200px] mx-auto flex items-center justify-center gap-3 bg-[#1B2A49] text-white p-4 rounded-full shadow-2xl pointer-events-auto active:scale-95 transition-all font-black uppercase text-[10px] tracking-widest border border-white/10"
+          className="bg-[#1B2A49] text-white px-8 py-4 rounded-full shadow-2xl pointer-events-auto active:scale-95 transition-all font-black uppercase text-[10px] tracking-widest border border-white/10 flex items-center gap-3"
         >
           <ArrowLeft size={16} /> Retour Board
         </button>
