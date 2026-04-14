@@ -10,10 +10,15 @@ const Accueil = ({ onNavigate }) => {
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   
+  // États pour le formulaire
   const [newTexte, setNewTexte] = useState('');
   const [newNotes, setNewNotes] = useState('');
   const [selectedDay, setSelectedDay] = useState('');
   const [selectedSection, setSelectedSection] = useState('Sortie');
+
+  // État pour le Pop-up de confirmation (Toast)
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
 
   const joursSemaine = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
   const jourActuel = joursSemaine[new Date().getDay()];
@@ -33,6 +38,12 @@ const Accueil = ({ onNavigate }) => {
     setLoading(false);
   };
 
+  const triggerToast = (message) => {
+    setToastMessage(message);
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 3000);
+  };
+
   const toggleTache = async (id, etatActuel, isActive) => {
     if (!isActive) return;
     const { error } = await supabase.from('consignes').update({ est_fait: !etatActuel }).eq('id', id);
@@ -42,7 +53,10 @@ const Accueil = ({ onNavigate }) => {
   const supprimerTache = async (id) => {
     if (window.confirm("Supprimer cette fiche définitivement ?")) {
       const { error } = await supabase.from('consignes').delete().eq('id', id);
-      if (!error) setConsignes(consignes.filter(t => t.id !== id));
+      if (!error) {
+        setConsignes(consignes.filter(t => t.id !== id));
+        triggerToast("Fiche supprimée");
+      }
     }
   };
 
@@ -85,6 +99,7 @@ const Accueil = ({ onNavigate }) => {
     if (!error) {
       fetchConsignes();
       setIsAdminOpen(false);
+      triggerToast(editingId ? "Modification enregistrée !" : "Nouvelle fiche ajoutée !");
     }
   };
 
@@ -121,7 +136,18 @@ const Accueil = ({ onNavigate }) => {
   );
 
   return (
-    <div className="min-h-screen bg-[#F1F5F9] font-sans overflow-x-hidden">
+    <div className="min-h-screen bg-[#F1F5F9] font-sans overflow-x-hidden relative">
+      
+      {/* POP-UP DE CONFIRMATION (TOAST) */}
+      {showToast && (
+        <div className="fixed top-10 left-1/2 -translate-x-1/2 z-[100] animate-in fade-in slide-in-from-top duration-500">
+          <div className="bg-[#1B2A49] text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border-2 border-[#8DC63F]">
+            <CheckCircle2 size={18} className="text-[#8DC63F]" />
+            <span className="font-black uppercase text-[10px] tracking-widest">{toastMessage}</span>
+          </div>
+        </div>
+      )}
+
       <header className="fixed top-0 left-0 right-0 bg-[#1B2A49] z-40 px-6 pt-12 pb-8 rounded-b-[45px] shadow-2xl flex flex-col items-center">
         <button onClick={() => handleOpenModal()} className="absolute top-6 right-6 bg-[#8DC63F] text-[#1B2A49] p-3.5 rounded-2xl shadow-lg active:scale-90 transition-all font-bold">
           <Plus size={24} strokeWidth={3} />
@@ -132,16 +158,17 @@ const Accueil = ({ onNavigate }) => {
       </header>
 
       <main className="w-full max-w-md mx-auto px-6 pt-64 pb-40">
+        {/* BOUTONS RAPIDES */}
         <div className="grid grid-cols-3 gap-3 mb-10">
-          <button onClick={() => onNavigate('urgences')} className="bg-white p-4 rounded-3xl shadow-sm border border-red-50 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all">
+          <button onClick={() => onNavigate('urgences')} className="bg-white p-4 rounded-3xl shadow-sm border border-red-50 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all text-center">
             <div className="bg-red-500 p-2 rounded-xl text-white"><Phone size={18} /></div>
             <span className="text-[8px] font-black uppercase text-[#1B2A49]">Urgences</span>
           </button>
-          <button onClick={() => onNavigate('soins')} className="bg-white p-4 rounded-3xl shadow-sm border border-blue-50 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all">
+          <button onClick={() => onNavigate('soins')} className="bg-white p-4 rounded-3xl shadow-sm border border-blue-50 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all text-center">
             <div className="bg-red-100 p-2 rounded-xl text-red-600"><Pill size={18} /></div>
             <span className="text-[8px] font-black uppercase text-[#1B2A49]">Soins</span>
           </button>
-          <button onClick={() => onNavigate('documents')} className="bg-white p-4 rounded-3xl shadow-sm border border-blue-50 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all">
+          <button onClick={() => onNavigate('documents')} className="bg-white p-4 rounded-3xl shadow-sm border border-blue-50 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all text-center">
             <div className="bg-[#1B2A49] p-2 rounded-xl text-white"><FileText size={18} /></div>
             <span className="text-[8px] font-black uppercase text-[#1B2A49]">Docs</span>
           </button>
@@ -151,6 +178,7 @@ const Accueil = ({ onNavigate }) => {
           <div className="flex justify-center p-20 text-gray-300 animate-pulse font-black uppercase text-[10px] tracking-widest text-center">Mise à jour...</div>
         ) : (
           <div className="space-y-10">
+            {/* SECTIONS */}
             {[
               { id: 'Sortie', label: 'Chevaux à sortir', icon: DoorOpen, color: 'text-blue-500' },
               { id: 'Arret', label: 'Chevaux à l\'arrêt', icon: Ban, color: 'text-orange-500' },
@@ -171,6 +199,7 @@ const Accueil = ({ onNavigate }) => {
               );
             })}
 
+            {/* PRÉVISIONS */}
             {tasksFuture.length > 0 && (
               <div className="mt-16 pt-10 border-t-2 border-gray-200/50">
                 <h3 className="flex items-center gap-2 font-black text-[11px] uppercase tracking-[0.2em] mb-6 ml-2 text-gray-400">
@@ -188,7 +217,7 @@ const Accueil = ({ onNavigate }) => {
       {/* MODAL AJOUT / MODIF */}
       {isAdminOpen && (
         <div className="fixed inset-0 bg-[#1B2A49]/95 z-50 flex items-end justify-center px-4 backdrop-blur-md">
-          <div className="bg-white w-full max-w-md rounded-t-[40px] p-8 pb-10 shadow-2xl animate-in slide-in-from-bottom duration-300">
+          <div className="bg-white w-full max-w-md rounded-t-[40px] p-8 pb-10 shadow-2xl animate-in slide-in-from-bottom duration-300 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h2 className="font-black text-2xl uppercase text-[#1B2A49] tracking-tighter">{editingId ? 'Modifier' : 'Nouvelle'} Fiche</h2>
               <button onClick={() => setIsAdminOpen(false)} className="bg-gray-100 p-2 rounded-full text-gray-400"><X size={20}/></button>
