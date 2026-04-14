@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Plus, X, Trash2, Pill, Clock, Calendar, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Plus, X, Trash2, Pill, Clock, Edit3, AlertTriangle } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = 'https://lnwvlyswsmtafyoepovq.supabase.co';
@@ -10,11 +10,12 @@ const Soins = ({ onNavigate }) => {
   const [soins, setSoins] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState(null);
 
-  const [newSoin, setNewSoin] = useState({
+  const [formData, setFormData] = useState({
     cheval: '', traitement: '', dosage: '',
     matin: false, midi: false, soir: false,
-    date_fin: ''
+    date_fin: '', notes: ''
   });
 
   useEffect(() => {
@@ -31,23 +32,33 @@ const Soins = ({ onNavigate }) => {
     setLoading(false);
   };
 
-  const ajouterSoin = async () => {
-    if (!newSoin.cheval || !newSoin.traitement) return;
+  const handleOpenModal = (soin = null) => {
+    if (soin) {
+      setEditingId(soin.id);
+      setFormData({ ...soin, date_fin: soin.date_fin || '', notes: soin.notes || '' });
+    } else {
+      setEditingId(null);
+      setFormData({ cheval: '', traitement: '', dosage: '', matin: false, midi: false, soir: false, date_fin: '', notes: '' });
+    }
+    setIsModalOpen(true);
+  };
 
-    // CORRECTION ICI : On transforme "" en null pour la date
-    const donneesAEnvoyer = {
-      ...newSoin,
-      date_fin: newSoin.date_fin === "" ? null : newSoin.date_fin
-    };
+  const enregistrerSoin = async () => {
+    if (!formData.cheval || !formData.traitement) return;
+    const payload = { ...formData, date_fin: formData.date_fin === "" ? null : formData.date_fin };
 
-    const { error } = await supabase.from('soins').insert([donneesAEnvoyer]);
-    
+    let error;
+    if (editingId) {
+      const { error: err } = await supabase.from('soins').update(payload).eq('id', editingId);
+      error = err;
+    } else {
+      const { error: err } = await supabase.from('soins').insert([payload]);
+      error = err;
+    }
+
     if (!error) {
       fetchSoins();
       setIsModalOpen(false);
-      setNewSoin({ cheval: '', traitement: '', dosage: '', matin: false, midi: false, soir: false, date_fin: '' });
-    } else {
-      alert("Erreur de base de données : " + error.message);
     }
   };
 
@@ -58,37 +69,6 @@ const Soins = ({ onNavigate }) => {
     }
   };
 
-  const ColonneSoin = ({ titre, moment, icon }) => (
-    <div className="bg-white rounded-[30px] shadow-sm p-5 border border-gray-100 h-full">
-      <div className="flex items-center gap-2 mb-4 text-[#1B2A49] opacity-40 font-black text-[10px] uppercase tracking-widest">
-        {icon} {titre}
-      </div>
-      <div className="space-y-3">
-        {soins.filter(s => s[moment]).map(s => (
-          <div key={s.id} className="bg-gray-50 p-4 rounded-2xl relative group">
-            <button onClick={() => supprimerSoin(s.id)} className="absolute top-2 right-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-              <Trash2 size={14}/>
-            </button>
-            <div className="font-black text-sm text-[#1B2A49] uppercase leading-tight">{s.cheval}</div>
-            <div className="text-blue-600 font-bold text-xs mt-1">{s.traitement}</div>
-            <div className="text-gray-400 font-bold text-[10px] mt-1 italic">{s.dosage}</div>
-            
-            {/* AFFICHAGE DE LA DATE CORRIGÉ */}
-            {s.date_fin ? (
-              <div className="text-[9px] font-black text-orange-400 mt-2 uppercase tracking-tighter">
-                Fin : {new Date(s.date_fin).toLocaleDateString()}
-              </div>
-            ) : (
-              <div className="text-[9px] font-black text-blue-400 mt-2 uppercase tracking-tighter">
-                Traitement continu
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-32">
       <header className="bg-[#1B2A49] p-8 pt-12 rounded-b-[45px] shadow-xl text-center relative text-white">
@@ -96,59 +76,113 @@ const Soins = ({ onNavigate }) => {
           <ArrowLeft size={20} />
         </button>
         <Pill size={32} className="text-red-400 mx-auto mb-2" />
-        <h1 className="font-black uppercase text-xl tracking-tighter">Pharmacie & Soins</h1>
+        <h1 className="font-black uppercase text-xl tracking-tighter">Gestion des Soins</h1>
       </header>
 
-      <main className="max-w-6xl mx-auto p-6">
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="w-full bg-white border-2 border-dashed border-gray-200 p-6 rounded-3xl text-gray-400 font-bold text-xs mb-8 flex flex-col items-center justify-center gap-2"
-        >
+      <main className="max-w-6xl mx-auto p-4">
+        <button onClick={() => handleOpenModal()} className="w-full bg-white border-2 border-dashed border-gray-200 p-6 rounded-3xl text-gray-400 font-bold text-xs mb-8 flex flex-col items-center justify-center gap-2">
           <Plus size={24} /> <span>NOUVEAU TRAITEMENT</span>
         </button>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <ColonneSoin titre="Matin" moment="matin" icon={<Clock size={14}/>} />
-          <ColonneSoin titre="Midi" moment="midi" icon={<Clock size={14}/>} />
-          <ColonneSoin titre="Soir" moment="soir" icon={<Clock size={14}/>} />
+        <div className="space-y-4">
+          {soins.map(s => {
+            const isDopant = s.notes?.toLowerCase().includes('dopant');
+            return (
+              <div key={s.id} className={`bg-white p-6 rounded-[35px] shadow-sm border-2 flex flex-col lg:flex-row lg:items-center justify-between gap-6 ${isDopant ? 'border-red-100 bg-red-50/10' : 'border-white'}`}>
+                
+                {/* BLOC INFOS */}
+                <div className="flex-1">
+                  <div className="flex items-center gap-3">
+                    <span className="font-black text-xl text-[#1B2A49] uppercase tracking-tighter">{s.cheval}</span>
+                    {isDopant && <span className="bg-red-500 text-white text-[9px] font-black px-3 py-1 rounded-full flex items-center gap-1 animate-pulse"><AlertTriangle size={12}/> DOPANT</span>}
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-3">
+                    <span className="text-blue-600 font-black text-sm uppercase">{s.traitement}</span>
+                    <span className="text-gray-400 font-bold text-xs italic">{s.dosage}</span>
+                  </div>
+                  {s.notes && (
+                    <div className="mt-3 text-[11px] font-bold text-[#1B2A49]/70 bg-gray-50 p-3 rounded-2xl border-l-4 border-blue-400">
+                      📝 {s.notes}
+                    </div>
+                  )}
+                </div>
+
+                {/* BLOC PLANNING (COULEURS) */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className={`flex items-center gap-2 px-4 py-2 rounded-2xl font-black text-[10px] uppercase transition-all ${s.matin ? 'bg-orange-100 text-orange-600 border border-orange-200 shadow-sm' : 'bg-gray-50 text-gray-200'}`}>
+                    <Clock size={14} /> MATIN
+                  </div>
+                  <div className={`flex items-center gap-2 px-4 py-2 rounded-2xl font-black text-[10px] uppercase transition-all ${s.midi ? 'bg-amber-100 text-amber-600 border border-amber-200 shadow-sm' : 'bg-gray-50 text-gray-200'}`}>
+                    <Clock size={14} /> MIDI
+                  </div>
+                  <div className={`flex items-center gap-2 px-4 py-2 rounded-2xl font-black text-[10px] uppercase transition-all ${s.soir ? 'bg-indigo-100 text-indigo-600 border border-indigo-200 shadow-sm' : 'bg-gray-50 text-gray-200'}`}>
+                    <Clock size={14} /> SOIR
+                  </div>
+                </div>
+
+                {/* BLOC ACTIONS */}
+                <div className="flex items-center gap-3 border-t lg:border-t-0 pt-4 lg:pt-0">
+                  <div className="text-right px-4">
+                    <span className="block text-[8px] font-black uppercase text-gray-400 tracking-widest text-center lg:text-right">Échéance</span>
+                    <span className="text-[10px] font-black text-[#1B2A49] uppercase">
+                      {s.date_fin ? new Date(s.date_fin).toLocaleDateString() : 'Continu'}
+                    </span>
+                  </div>
+                  <button onClick={() => handleOpenModal(s)} className="p-4 bg-gray-50 text-gray-400 hover:text-blue-500 rounded-2xl transition-all active:scale-90">
+                    <Edit3 size={20} />
+                  </button>
+                  <button onClick={() => supprimerSoin(s.id)} className="p-4 bg-gray-50 text-gray-400 hover:text-red-500 rounded-2xl transition-all active:scale-90">
+                    <Trash2 size={20} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </main>
 
+      {/* MODAL AJOUT/MODIF */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-[#1B2A49]/95 z-50 flex items-center justify-center p-4 backdrop-blur-md">
-          <div className="bg-white w-full max-w-md rounded-[40px] p-8 shadow-2xl">
+        <div className="fixed inset-0 bg-[#1B2A49]/95 z-50 flex items-center justify-center p-4 backdrop-blur-md overflow-y-auto">
+          <div className="bg-white w-full max-w-md rounded-[45px] p-8 shadow-2xl my-auto">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="font-black text-xl uppercase text-[#1B2A49]">Nouveau Soin</h2>
+              <h2 className="font-black text-xl uppercase text-[#1B2A49] tracking-tighter">{editingId ? 'Modifier le Soin' : 'Nouveau Traitement'}</h2>
               <button onClick={() => setIsModalOpen(false)} className="bg-gray-100 p-2 rounded-full text-gray-400"><X size={20}/></button>
             </div>
             
             <div className="space-y-4">
-              <input type="text" placeholder="NOM DU CHEVAL" className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold" 
-                value={newSoin.cheval} onChange={e => setNewSoin({...newSoin, cheval: e.target.value.toUpperCase()})} />
-              
-              <input type="text" placeholder="MÉDICAMENT / SOIN" className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold text-blue-600" 
-                value={newSoin.traitement} onChange={e => setNewSoin({...newSoin, traitement: e.target.value})} />
-              
-              <input type="text" placeholder="DOSAGE (ex: 2 sachets)" className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold" 
-                value={newSoin.dosage} onChange={e => setNewSoin({...newSoin, dosage: e.target.value})} />
+              <input type="text" placeholder="NOM DU CHEVAL" className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold outline-none focus:border-blue-400" 
+                value={formData.cheval} onChange={e => setFormData({...formData, cheval: e.target.value.toUpperCase()})} />
+              <input type="text" placeholder="MÉDICAMENT / SOIN" className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold text-blue-600 outline-none focus:border-blue-400" 
+                value={formData.traitement} onChange={e => setFormData({...formData, traitement: e.target.value})} />
+              <input type="text" placeholder="DOSAGE" className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold outline-none focus:border-blue-400" 
+                value={formData.dosage} onChange={e => setFormData({...formData, dosage: e.target.value})} />
 
               <div className="grid grid-cols-3 gap-2">
                 {['matin', 'midi', 'soir'].map(m => (
-                  <button key={m} onClick={() => setNewSoin({...newSoin, [m]: !newSoin[m]})}
-                    className={`p-3 rounded-xl font-black uppercase text-[10px] border-2 transition-all ${newSoin[m] ? 'bg-blue-500 border-blue-500 text-white' : 'border-gray-100 text-gray-300'}`}>
+                  <button key={m} onClick={() => setFormData({...formData, [m]: !formData[m]})}
+                    className={`p-3 rounded-2xl font-black uppercase text-[10px] border-2 transition-all ${formData[m] ? 'bg-blue-500 border-blue-500 text-white shadow-lg shadow-blue-200' : 'bg-white border-gray-100 text-gray-300'}`}>
                     {m}
                   </button>
                 ))}
               </div>
 
               <div>
-                <label className="text-[10px] font-black uppercase text-gray-400 ml-2">Date de fin (Optionnel)</label>
-                <input type="date" className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold mt-1" 
-                  value={newSoin.date_fin} onChange={e => setNewSoin({...newSoin, date_fin: e.target.value})} />
+                <label className="text-[10px] font-black uppercase text-gray-400 ml-2">Annotations / Instructions</label>
+                <textarea placeholder="Ex: Dopant, uniquement lun-jeu..." className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold mt-1 h-20 outline-none focus:border-blue-400" 
+                  value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} />
               </div>
 
-              <button onClick={ajouterSoin} className="w-full bg-[#1B2A49] text-white py-5 rounded-3xl font-black uppercase tracking-widest shadow-lg mt-4">
-                ENREGISTRER
+              <div className="flex gap-4 items-center">
+                <div className="flex-1">
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-2 tracking-widest flex items-center gap-1"><Calendar size={12}/> Date de fin</label>
+                  <input type="date" className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold mt-1 outline-none" 
+                    value={formData.date_fin} onChange={e => setFormData({...formData, date_fin: e.target.value})} />
+                </div>
+              </div>
+
+              <button onClick={enregistrerSoin} className="w-full bg-[#1B2A49] text-white py-5 rounded-[25px] font-black uppercase tracking-widest shadow-xl mt-4 active:scale-95 transition-all">
+                {editingId ? 'Mettre à jour' : 'Enregistrer le soin'}
               </button>
             </div>
           </div>
