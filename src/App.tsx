@@ -1,3 +1,4 @@
+import Soins from './soins';
 import Documents from './Documents';
 import React, { useState } from 'react';
 import Accueil from './Accueil';
@@ -32,6 +33,11 @@ export default function App() {
       {/* 5. Page Cours -> Affiche TON PLANNING PERSONNEL */}
       {currentPage === 'planning-monitrices' && (
         <PlanningPersonnel onNavigate={setCurrentPage} />
+      )}
+
+      {/* 6. NOUVELLE PAGE : SOINS & PHARMACIE */}
+      {currentPage === 'soins' && (
+        <Soins onNavigate={() => setCurrentPage('accueil')} />
       )}
     </div>
   );

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, GraduationCap, Plus, X, CheckCircle2, Circle, Trash2, HeartPulse, DoorOpen, Ban, Phone, FileText, Info, Forward } from 'lucide-react';
+import { Calendar, GraduationCap, Plus, X, CheckCircle2, Circle, Trash2, HeartPulse, DoorOpen, Ban, Phone, FileText, Info, Forward, Pill } from 'lucide-react';
 import { supabase } from './supabaseClient';
 
 const LOGO_URL = "https://lnwvlyswsmtafyoepovq.supabase.co/storage/v1/object/public/logo/logo.png";
@@ -97,15 +97,21 @@ const Accueil = ({ onNavigate }) => {
       </header>
 
       <main className="w-full max-w-md mx-auto px-6 pt-64 pb-40">
-        {/* BOUTONS RAPIDES */}
-        <div className="grid grid-cols-2 gap-4 mb-10">
-          <button onClick={() => onNavigate('urgences')} className="bg-white p-4 rounded-3xl shadow-sm border border-red-50 flex items-center justify-center gap-3 active:scale-95 transition-all">
+        {/* BOUTONS RAPIDES - AVEC SOINS AU CENTRE */}
+        <div className="grid grid-cols-3 gap-3 mb-10">
+          <button onClick={() => onNavigate('urgences')} className="bg-white p-4 rounded-3xl shadow-sm border border-red-50 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all">
             <div className="bg-red-500 p-2 rounded-xl text-white"><Phone size={18} /></div>
-            <span className="text-[10px] font-black uppercase text-[#1B2A49]">Urgences</span>
+            <span className="text-[8px] font-black uppercase text-[#1B2A49]">Urgences</span>
           </button>
-          <button onClick={() => onNavigate('documents')} className="bg-white p-4 rounded-3xl shadow-sm border border-blue-50 flex items-center justify-center gap-3 active:scale-95 transition-all">
+          
+          <button onClick={() => onNavigate('soins')} className="bg-white p-4 rounded-3xl shadow-sm border border-blue-50 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all">
+            <div className="bg-red-100 p-2 rounded-xl text-red-600"><Pill size={18} /></div>
+            <span className="text-[8px] font-black uppercase text-[#1B2A49]">Soins</span>
+          </button>
+
+          <button onClick={() => onNavigate('documents')} className="bg-white p-4 rounded-3xl shadow-sm border border-blue-50 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all">
             <div className="bg-[#1B2A49] p-2 rounded-xl text-white"><FileText size={18} /></div>
-            <span className="text-[10px] font-black uppercase text-[#1B2A49]">Docs</span>
+            <span className="text-[8px] font-black uppercase text-[#1B2A49]">Docs</span>
           </button>
         </div>
 
@@ -134,7 +140,7 @@ const Accueil = ({ onNavigate }) => {
               );
             })}
 
-            {/* SECTION PRÉVISIONS (TOUT EN BAS) */}
+            {/* SECTION PRÉVISIONS */}
             {tasksFuture.length > 0 && (
               <div className="mt-16 pt-10 border-t-2 border-gray-200/50">
                 <h3 className="flex items-center gap-2 font-black text-[11px] uppercase tracking-[0.2em] mb-6 ml-2 text-gray-400">
@@ -192,7 +198,7 @@ const Accueil = ({ onNavigate }) => {
         </div>
       )}
 
-      {/* FOOTER - NAVIGATION CORRIGÉE */}
+      {/* FOOTER - NAVIGATION SANS SOINS */}
       <footer className="fixed bottom-0 left-0 right-0 p-8 z-40 pointer-events-none">
         <div className="max-w-xs mx-auto flex items-center justify-around bg-[#1B2A49] p-4 rounded-[32px] shadow-2xl border border-white/10 backdrop-blur-lg pointer-events-auto">
           <button onClick={() => onNavigate('accueil')} className="flex flex-col items-center text-[#8DC63F] flex-1">
