@@ -39,21 +39,36 @@ const Accueil = ({ onNavigate }) => {
   };
 
   const checkNotifications = async () => {
-    const quatreHeuresEnMs = 4 * 60 * 60 * 1000;
+    // On définit "récent" comme moins de 24h pour ton test
+    const delaiMs = 24 * 60 * 60 * 1000; 
     const maintenant = new Date().getTime();
 
-    // Check Soins
-    const { data: lastSoin } = await supabase.from('soins').select('created_at').order('created_at', { ascending: false }).limit(1);
-    if (lastSoin?.[0]) {
-      const dateSoin = new Date(lastSoin[0].created_at).getTime();
-      if (maintenant - dateSoin < quatreHeuresEnMs) setNotifSoins(true);
-    }
+    try {
+      // 1. Vérification des Soins
+      const { data: lastSoin } = await supabase
+        .from('soins')
+        .select('created_at')
+        .order('created_at', { ascending: false })
+        .limit(1);
 
-    // Check Planning
-    const { data: lastPlan } = await supabase.from('planning_ecurie').select('created_at').order('created_at', { ascending: false }).limit(1);
-    if (lastPlan?.[0]) {
-      const datePlan = new Date(lastPlan[0].created_at).getTime();
-      if (maintenant - datePlan < quatreHeuresEnMs) setNotifPlanning(true);
+      if (lastSoin?.[0]) {
+        const dateSoin = new Date(lastSoin[0].created_at).getTime();
+        if (maintenant - dateSoin < delaiMs) setNotifSoins(true);
+      }
+
+      // 2. Vérification du Planning via ta table app_state
+      const { data: lastState } = await supabase
+        .from('app_state')
+        .select('created_at')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (lastState?.[0]) {
+        const dateState = new Date(lastState[0].created_at).getTime();
+        if (maintenant - dateState < delaiMs) setNotifPlanning(true);
+      }
+    } catch (e) {
+      console.log("Erreur de notif:", e);
     }
   };
 

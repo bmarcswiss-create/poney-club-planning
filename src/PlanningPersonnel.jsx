@@ -337,7 +337,28 @@ const PlanningPersonnel = ({ onNavigate }) => {
                      </div>
                      <div className="space-y-3">
                         {(OFFICIAL_EVENTS_2026[selectedDate] || evenementsPerso[selectedDate] || notes[selectedDate]) && (<div className="bg-purple-50 p-3 rounded-2xl border border-purple-100 h-full"><span className="text-[9px] font-black uppercase opacity-40 block mb-1">Événements & Notes</span><div className="space-y-1.5">{OFFICIAL_EVENTS_2026[selectedDate]?.map((e, i) => <div key={i} className="text-[10px] font-black text-purple-700 uppercase flex items-center gap-1"><Info size={10}/> {e.titre}</div>)}{evenementsPerso[selectedDate]?.map((e, i) => <div key={i} className="text-[10px] font-black text-blue-700 uppercase flex items-center gap-1"><Calendar size={10}/> {e.titre}</div>)}{notes[selectedDate] && <div className="text-[10px] font-bold text-amber-700 italic border-t border-amber-100 pt-1 mt-1 flex items-start gap-1"><StickyNote size={10} className="shrink-0 mt-0.5"/> "{notes[selectedDate]}"</div>}</div></div>)}
-                     </div>
+                     </div>{evenementsPerso[selectedDate]?.map((e, i) => (
+  <div key={i} className="text-[10px] font-black text-blue-700 uppercase flex items-center justify-between group">
+    <div className="flex items-center gap-1">
+      <Calendar size={10}/> {e.titre}
+    </div>
+    {isAdmin && (
+      <Trash2 
+        size={11} 
+        className="text-red-400 cursor-pointer hover:text-red-600 ml-2" 
+        onClick={async () => {
+          if(window.confirm("Supprimer cet événement ?")) {
+            const nx = { ...evenementsPerso };
+            nx[selectedDate] = nx[selectedDate].filter((_, idx) => idx !== i);
+            setEvenementsPerso(nx);
+            // On utilise ta fonction syncAll pour sauvegarder dans Supabase
+            await syncAll(membresBase, conges, notes, nx, manualPresence);
+          }
+        }}
+      />
+    )}
+  </div>
+))}
                   </div>
               </div>
             </div>
