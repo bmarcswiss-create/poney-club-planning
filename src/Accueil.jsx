@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, GraduationCap, Plus, X, CheckCircle2, Circle, Trash2, HeartPulse, DoorOpen, Ban, Phone, FileText, Info, Forward, Pill, Edit3 } from 'lucide-react';
+import { Calendar, GraduationCap, Plus, X, CheckCircle2, Circle, Trash2, HeartPulse, DoorOpen, Ban, Phone, FileText, Info, Forward, Pill, Edit3, ClipboardList } from 'lucide-react';
 import { supabase } from './supabaseClient';
 
 const LOGO_URL = "https://lnwvlyswsmtafyoepovq.supabase.co/storage/v1/object/public/logo/logo.png";
@@ -40,18 +40,15 @@ const Accueil = ({ onNavigate }) => {
 
   const checkNotifications = async () => {
     try {
-      // Récupérer les dates de dernier passage stockées localement sur ton téléphone
       const lastVisitSoins = localStorage.getItem('lastVisitSoins') || "0";
       const lastVisitPlanning = localStorage.getItem('lastVisitPlanning') || "0";
 
-      // 1. Check Soins
       const { data: lastSoin } = await supabase.from('soins').select('created_at').order('created_at', { ascending: false }).limit(1);
       if (lastSoin?.[0]) {
         const timeSoin = new Date(lastSoin[0].created_at).getTime();
         if (timeSoin > parseInt(lastVisitSoins)) setNotifSoins(true);
       }
 
-      // 2. Check Planning (via app_state)
       const { data: lastState } = await supabase.from('app_state').select('created_at').order('created_at', { ascending: false }).limit(1);
       if (lastState?.[0]) {
         const timeState = new Date(lastState[0].created_at).getTime();
@@ -60,7 +57,6 @@ const Accueil = ({ onNavigate }) => {
     } catch (e) { console.log(e); }
   };
 
-  // Fonction pour "éteindre" la notif quand on clique
   const handleNavigateWithNotif = (target) => {
     if (target === 'soins') {
       localStorage.setItem('lastVisitSoins', Date.now().toString());
@@ -79,7 +75,6 @@ const Accueil = ({ onNavigate }) => {
     if (editingId) {
       await supabase.from('consignes').update(payload).eq('id', editingId);
     } else {
-      // On initialise last_done_at à null pour une nouvelle tâche
       await supabase.from('consignes').insert([{ ...payload, est_fait: false, last_done_at: null }]);
     }
     fetchConsignes();
@@ -88,7 +83,6 @@ const Accueil = ({ onNavigate }) => {
 
   const toggleTache = async (id, currentLastDone, isActive) => {
     if (!isActive) return;
-    // Si la tâche était faite aujourd'hui, on l'annule (null), sinon on met la date d'aujourd'hui
     const isDoneToday = currentLastDone === todayStr;
     const { error } = await supabase.from('consignes')
       .update({ last_done_at: isDoneToday ? null : todayStr })
@@ -114,9 +108,7 @@ const Accueil = ({ onNavigate }) => {
   const tasksFuture = consignes.filter(t => t.jour_semaine && t.jour_semaine !== jourActuel && t.jour_semaine !== 'permanent');
 
   const TaskCard = ({ t, isActive }) => {
-    // RÈGLE CRUCIALE : Une tâche est considérée "faite" UNIQUEMENT si sa date de validation est AUJOURD'HUI
     const estFaitAujourdhui = t.last_done_at === todayStr;
-
     return (
       <div className={`flex flex-col p-4 rounded-3xl border-2 transition-all shadow-sm ${isActive ? 'bg-white border-white' : 'bg-white/40 border-transparent opacity-60'}`}>
         <div className="flex items-center justify-between">
@@ -159,19 +151,28 @@ const Accueil = ({ onNavigate }) => {
       </header>
 
       <main className="w-full max-w-md mx-auto px-6 pt-64">
-        <div className="grid grid-cols-3 gap-3 mb-10">
-          <button onClick={() => onNavigate('urgences')} className="bg-white p-4 rounded-3xl shadow-sm border border-red-50 flex flex-col items-center gap-2 relative">
-            <div className="bg-red-500 p-2 rounded-xl text-white"><Phone size={18} /></div>
-            <span className="text-[8px] font-black uppercase text-[#1B2A49]">Urgences</span>
+        {/* GRILLE DE BOUTONS MISE À JOUR (4 boutons) */}
+        <div className="grid grid-cols-4 gap-2 mb-10">
+          <button onClick={() => onNavigate('urgences')} className="bg-white p-3 rounded-[24px] shadow-sm border border-red-50 flex flex-col items-center gap-2 relative">
+            <div className="bg-red-500 p-2 rounded-xl text-white"><Phone size={16} /></div>
+            <span className="text-[7px] font-black uppercase text-[#1B2A49]">Urgences</span>
           </button>
-          <button onClick={() => handleNavigateWithNotif('soins')} className="bg-white p-4 rounded-3xl shadow-sm border border-blue-50 flex flex-col items-center gap-2 relative">
-            <div className="bg-red-100 p-2 rounded-xl text-red-600"><Pill size={18} /></div>
-            <span className="text-[8px] font-black uppercase text-[#1B2A49]">Soins</span>
+          
+          <button onClick={() => handleNavigateWithNotif('soins')} className="bg-white p-3 rounded-[24px] shadow-sm border border-blue-50 flex flex-col items-center gap-2 relative">
+            <div className="bg-red-100 p-2 rounded-xl text-red-600"><Pill size={16} /></div>
+            <span className="text-[7px] font-black uppercase text-[#1B2A49]">Soins</span>
             {notifSoins && <Badge />}
           </button>
-          <button onClick={() => onNavigate('documents')} className="bg-white p-4 rounded-3xl shadow-sm border border-blue-50 flex flex-col items-center gap-2">
-            <div className="bg-[#1B2A49] p-2 rounded-xl text-white"><FileText size={18} /></div>
-            <span className="text-[8px] font-black uppercase text-[#1B2A49]">Docs</span>
+
+          {/* NOUVEAU BOUTON PLANNING SORTIES */}
+          <button onClick={() => onNavigate('planning-sorties')} className="bg-white p-3 rounded-[24px] shadow-sm border border-green-50 flex flex-col items-center gap-2">
+            <div className="bg-[#8DC63F]/20 p-2 rounded-xl text-[#1B2A49]"><ClipboardList size={16} /></div>
+            <span className="text-[7px] font-black uppercase text-[#1B2A49]">Sorties</span>
+          </button>
+
+          <button onClick={() => onNavigate('documents')} className="bg-white p-3 rounded-[24px] shadow-sm border border-blue-50 flex flex-col items-center gap-2">
+            <div className="bg-[#1B2A49] p-2 rounded-xl text-white"><FileText size={16} /></div>
+            <span className="text-[7px] font-black uppercase text-[#1B2A49]">Docs</span>
           </button>
         </div>
 
@@ -200,7 +201,7 @@ const Accueil = ({ onNavigate }) => {
             })}
 
             {tasksFuture.length > 0 && (
-              <div className="mt-16 pt-10 border-t-2 border-gray-200/50">
+              <div className="mt-16 pt-10 border-t-2 border-gray-200/50 text-left">
                 <h3 className="flex items-center gap-2 font-black text-[11px] uppercase tracking-[0.2em] mb-6 ml-2 text-gray-400">
                   <Forward size={16} /> Prévisions pour la semaine
                 </h3>
