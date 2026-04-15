@@ -20,6 +20,10 @@ const Soins = ({ onNavigate }) => {
 
   useEffect(() => {
     fetchSoins();
+    
+    // RÈGLE DE LA PASTILLE : Dès qu'on ouvre la page, on enregistre l'heure de passage
+    // Cela permet à la pastille rouge de l'accueil de s'éteindre.
+    localStorage.setItem('lastVisitSoins', Date.now().toString());
   }, []);
 
   const fetchSoins = async () => {
@@ -36,7 +40,6 @@ const Soins = ({ onNavigate }) => {
     setLoading(false);
   };
 
-  // FONCTION CORRIGÉE POUR ÉVITER LA PAGE BLANCHE
   const handleOpenModal = (soin = null) => {
     if (soin) {
       setEditingId(soin.id);
@@ -122,7 +125,7 @@ const Soins = ({ onNavigate }) => {
             return (
               <div key={s.id} className={`bg-white p-6 rounded-[35px] shadow-sm border-2 flex flex-col lg:flex-row lg:items-center justify-between gap-6 ${isDopant ? 'border-red-100 bg-red-50/10' : 'border-white'}`}>
                 
-                <div className="flex-1">
+                <div className="flex-1 text-left">
                   <div className="flex items-center gap-3">
                     <span className="font-black text-xl text-[#1B2A49] uppercase tracking-tighter">{s.cheval}</span>
                     {isDopant && <span className="bg-red-500 text-white text-[9px] font-black px-3 py-1 rounded-full flex items-center gap-1"><AlertTriangle size={12}/> DOPANT</span>}
@@ -132,7 +135,7 @@ const Soins = ({ onNavigate }) => {
                     <span className="text-gray-400 font-bold text-xs italic">{s.dosage}</span>
                   </div>
                   {s.notes && (
-                    <div className="mt-3 text-[11px] font-bold text-[#1B2A49]/70 bg-gray-50 p-3 rounded-2xl border-l-4 border-blue-400 whitespace-pre-line">
+                    <div className="mt-3 text-[11px] font-bold text-[#1B2A49]/70 bg-gray-50 p-3 rounded-2xl border-l-4 border-blue-400 whitespace-pre-line text-left">
                       {s.notes}
                     </div>
                   )}
@@ -178,8 +181,8 @@ const Soins = ({ onNavigate }) => {
               <button onClick={() => setIsModalOpen(false)} className="bg-gray-100 p-2 rounded-full text-gray-400"><X size={20}/></button>
             </div>
             
-            <div className="space-y-4">
-              <input type="text" placeholder="NOM DU CHEVAL" className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold outline-none" 
+            <div className="space-y-4 text-left">
+              <input type="text" placeholder="NOM DU CHEVAL" className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold outline-none uppercase" 
                 value={formData.cheval} onChange={e => setFormData({...formData, cheval: e.target.value.toUpperCase()})} />
               <input type="text" placeholder="MÉDICAMENT / SOIN" className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold text-blue-600 outline-none" 
                 value={formData.traitement} onChange={e => setFormData({...formData, traitement: e.target.value})} />

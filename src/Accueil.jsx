@@ -10,7 +10,6 @@ const Accueil = ({ onNavigate }) => {
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   
-  // États pour les boules rouges
   const [notifSoins, setNotifSoins] = useState(false);
   const [notifPlanning, setNotifPlanning] = useState(false);
 
@@ -21,6 +20,7 @@ const Accueil = ({ onNavigate }) => {
 
   const joursSemaine = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
   const jourActuel = joursSemaine[new Date().getDay()];
+  const todayStr = new Date().toLocaleDateString('en-CA'); // Format YYYY-MM-DD
 
   const dateInfo = new Intl.DateTimeFormat('fr-FR', { 
     weekday: 'long', day: 'numeric', month: 'long' 
@@ -39,76 +39,60 @@ const Accueil = ({ onNavigate }) => {
   };
 
   const checkNotifications = async () => {
-    // On définit "récent" comme moins de 24h pour ton test
-    const delaiMs = 24 * 60 * 60 * 1000; 
-    const maintenant = new Date().getTime();
-
     try {
-      // 1. Vérification des Soins
-      const { data: lastSoin } = await supabase
-        .from('soins')
-        .select('created_at')
-        .order('created_at', { ascending: false })
-        .limit(1);
+      // Récupérer les dates de dernier passage stockées localement sur ton téléphone
+      const lastVisitSoins = localStorage.getItem('lastVisitSoins') || "0";
+      const lastVisitPlanning = localStorage.getItem('lastVisitPlanning') || "0";
 
+      // 1. Check Soins
+      const { data: lastSoin } = await supabase.from('soins').select('created_at').order('created_at', { ascending: false }).limit(1);
       if (lastSoin?.[0]) {
-        const dateSoin = new Date(lastSoin[0].created_at).getTime();
-        if (maintenant - dateSoin < delaiMs) setNotifSoins(true);
+        const timeSoin = new Date(lastSoin[0].created_at).getTime();
+        if (timeSoin > parseInt(lastVisitSoins)) setNotifSoins(true);
       }
 
-      // 2. Vérification du Planning via ta table app_state
-      const { data: lastState } = await supabase
-        .from('app_state')
-        .select('created_at')
-        .order('created_at', { ascending: false })
-        .limit(1);
-
+      // 2. Check Planning (via app_state)
+      const { data: lastState } = await supabase.from('app_state').select('created_at').order('created_at', { ascending: false }).limit(1);
       if (lastState?.[0]) {
-        const dateState = new Date(lastState[0].created_at).getTime();
-        if (maintenant - dateState < delaiMs) setNotifPlanning(true);
+        const timeState = new Date(lastState[0].created_at).getTime();
+        if (timeState > parseInt(lastVisitPlanning)) setNotifPlanning(true);
       }
-    } catch (e) {
-      console.log("Erreur de notif:", e);
-    }
+    } catch (e) { console.log(e); }
   };
 
-  const handleOpenModal = (tache = null) => {
-    if (tache) {
-      setEditingId(tache.id);
-      setNewTexte(tache.texte);
-      setNewNotes(tache.notes || '');
-      setSelectedSection(tache.section || 'Sortie');
-      setSelectedDay(tache.jour_semaine || '');
-    } else {
-      setEditingId(null);
-      setNewTexte('');
-      setNewNotes('');
-      setSelectedSection('Sortie');
-      setSelectedDay('');
+  // Fonction pour "éteindre" la notif quand on clique
+  const handleNavigateWithNotif = (target) => {
+    if (target === 'soins') {
+      localStorage.setItem('lastVisitSoins', Date.now().toString());
+      setNotifSoins(false);
     }
-    setIsAdminOpen(true);
+    if (target === 'planning-ecurie') {
+      localStorage.setItem('lastVisitPlanning', Date.now().toString());
+      setNotifPlanning(false);
+    }
+    onNavigate(target);
   };
 
   const enregistrerTache = async () => {
     if (!newTexte.trim()) return;
     const payload = { texte: newTexte, notes: newNotes, section: selectedSection, jour_semaine: selectedDay || null };
-    let error;
     if (editingId) {
-      const { error: err } = await supabase.from('consignes').update(payload).eq('id', editingId);
-      error = err;
+      await supabase.from('consignes').update(payload).eq('id', editingId);
     } else {
-      const { error: err } = await supabase.from('consignes').insert([{ ...payload, est_fait: false }]);
-      error = err;
+      // On initialise last_done_at à null pour une nouvelle tâche
+      await supabase.from('consignes').insert([{ ...payload, est_fait: false, last_done_at: null }]);
     }
-    if (!error) {
-      fetchConsignes();
-      setIsAdminOpen(false);
-    }
+    fetchConsignes();
+    setIsAdminOpen(false);
   };
 
-  const toggleTache = async (id, etatActuel, isActive) => {
+  const toggleTache = async (id, currentLastDone, isActive) => {
     if (!isActive) return;
-    const { error } = await supabase.from('consignes').update({ est_fait: !etatActuel }).eq('id', id);
+    // Si la tâche était faite aujourd'hui, on l'annule (null), sinon on met la date d'aujourd'hui
+    const isDoneToday = currentLastDone === todayStr;
+    const { error } = await supabase.from('consignes')
+      .update({ last_done_at: isDoneToday ? null : todayStr })
+      .eq('id', id);
     if (!error) fetchConsignes();
   };
 
@@ -120,7 +104,7 @@ const Accueil = ({ onNavigate }) => {
   };
 
   const Badge = () => (
-    <span className="absolute -top-1 -right-1 flex h-3 w-3">
+    <span className="absolute -top-1 -right-1 flex h-3 w-3 z-50">
       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
       <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500 border-2 border-white"></span>
     </span>
@@ -129,43 +113,48 @@ const Accueil = ({ onNavigate }) => {
   const tasksActive = consignes.filter(t => !t.jour_semaine || t.jour_semaine === jourActuel || t.jour_semaine === 'permanent');
   const tasksFuture = consignes.filter(t => t.jour_semaine && t.jour_semaine !== jourActuel && t.jour_semaine !== 'permanent');
 
-  const TaskCard = ({ t, isActive }) => (
-    <div className={`flex flex-col p-4 rounded-3xl border-2 transition-all shadow-sm ${isActive ? 'bg-white border-white' : 'bg-white/40 border-transparent opacity-60'}`}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4 flex-1" onClick={() => toggleTache(t.id, t.est_fait, isActive)}>
-          {isActive ? (
-            t.est_fait ? <CheckCircle2 className="text-[#8DC63F]" size={22} /> : <Circle className="text-gray-300" size={22} />
-          ) : (
-            <Calendar className="text-gray-400" size={18} />
-          )}
-          <div className="flex flex-col">
-            <span className={`text-[15px] font-bold leading-tight ${t.est_fait ? 'line-through text-gray-400' : 'text-[#1B2A49]'}`}>{t.texte}</span>
-            <span className="text-[9px] font-black uppercase text-[#8DC63F] mt-0.5">
-              {t.jour_semaine === 'permanent' ? "Jusqu'à effacement" : !t.jour_semaine ? "Aujourd'hui" : `Chaque ${t.jour_semaine}`}
-            </span>
+  const TaskCard = ({ t, isActive }) => {
+    // RÈGLE CRUCIALE : Une tâche est considérée "faite" UNIQUEMENT si sa date de validation est AUJOURD'HUI
+    const estFaitAujourdhui = t.last_done_at === todayStr;
+
+    return (
+      <div className={`flex flex-col p-4 rounded-3xl border-2 transition-all shadow-sm ${isActive ? 'bg-white border-white' : 'bg-white/40 border-transparent opacity-60'}`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4 flex-1" onClick={() => toggleTache(t.id, t.last_done_at, isActive)}>
+            {isActive ? (
+              estFaitAujourdhui ? <CheckCircle2 className="text-[#8DC63F]" size={22} /> : <Circle className="text-gray-300" size={22} />
+            ) : (
+              <Calendar className="text-gray-400" size={18} />
+            )}
+            <div className="flex flex-col text-left">
+              <span className={`text-[15px] font-black leading-tight ${estFaitAujourdhui ? 'line-through text-gray-400 opacity-50' : 'text-[#1B2A49]'}`}>{t.texte}</span>
+              <span className="text-[9px] font-black uppercase text-[#8DC63F] mt-0.5">
+                {t.jour_semaine === 'permanent' ? "Jusqu'à effacement" : !t.jour_semaine ? "Aujourd'hui" : `Chaque ${t.jour_semaine}`}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-1">
+            <button onClick={() => { setEditingId(t.id); setNewTexte(t.texte); setNewNotes(t.notes || ''); setSelectedSection(t.section || 'Sortie'); setSelectedDay(t.jour_semaine || ''); setIsAdminOpen(true); }} className="text-gray-200 hover:text-blue-400 p-2"><Edit3 size={16} /></button>
+            <button onClick={() => supprimerTache(t.id)} className="text-gray-200 hover:text-red-400 p-2"><Trash2 size={16} /></button>
           </div>
         </div>
-        <div className="flex items-center gap-1">
-          <button onClick={() => handleOpenModal(t)} className="text-gray-200 hover:text-blue-400 p-2"><Edit3 size={16} /></button>
-          <button onClick={() => supprimerTache(t.id)} className="text-gray-200 hover:text-red-400 p-2"><Trash2 size={16} /></button>
-        </div>
+        {t.notes && (
+          <div className="mt-2 ml-10 p-2 bg-gray-50 rounded-xl border-l-4 border-[#8DC63F]/30 text-[11px] font-medium text-gray-600 italic text-left">
+            {t.notes}
+          </div>
+        )}
       </div>
-      {t.notes && (
-        <div className="mt-2 ml-10 p-2 bg-gray-50 rounded-xl border-l-4 border-[#8DC63F]/30 text-[11px] font-medium text-gray-600 italic">
-          {t.notes}
-        </div>
-      )}
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="min-h-screen bg-[#F1F5F9] pb-40">
       <header className="fixed top-0 left-0 right-0 bg-[#1B2A49] z-40 px-6 pt-12 pb-8 rounded-b-[45px] shadow-2xl flex flex-col items-center">
-        <button onClick={() => handleOpenModal()} className="absolute top-6 right-6 bg-[#8DC63F] text-[#1B2A49] p-3.5 rounded-2xl shadow-lg font-bold">
+        <button onClick={() => { setEditingId(null); setNewTexte(''); setNewNotes(''); setSelectedSection('Sortie'); setSelectedDay(''); setIsAdminOpen(true); }} className="absolute top-6 right-6 bg-[#8DC63F] text-[#1B2A49] p-3.5 rounded-2xl shadow-lg font-bold">
           <Plus size={24} strokeWidth={3} />
         </button>
         <img src={LOGO_URL} alt="Logo" className="h-16 w-16 rounded-full border-4 border-[#8DC63F] mb-3 bg-white" />
-        <h1 className="text-white font-black uppercase text-lg tracking-tighter">Espace Collaborateur</h1>
+        <h1 className="text-white font-black uppercase text-lg tracking-tighter">Tableau de bord</h1>
         <p className="text-[#8DC63F] font-bold text-[10px] uppercase tracking-[0.2em] mt-1">{dateInfo}</p>
       </header>
 
@@ -175,7 +164,7 @@ const Accueil = ({ onNavigate }) => {
             <div className="bg-red-500 p-2 rounded-xl text-white"><Phone size={18} /></div>
             <span className="text-[8px] font-black uppercase text-[#1B2A49]">Urgences</span>
           </button>
-          <button onClick={() => onNavigate('soins')} className="bg-white p-4 rounded-3xl shadow-sm border border-blue-50 flex flex-col items-center gap-2 relative">
+          <button onClick={() => handleNavigateWithNotif('soins')} className="bg-white p-4 rounded-3xl shadow-sm border border-blue-50 flex flex-col items-center gap-2 relative">
             <div className="bg-red-100 p-2 rounded-xl text-red-600"><Pill size={18} /></div>
             <span className="text-[8px] font-black uppercase text-[#1B2A49]">Soins</span>
             {notifSoins && <Badge />}
@@ -224,14 +213,34 @@ const Accueil = ({ onNavigate }) => {
         )}
       </main>
 
+      <footer className="fixed bottom-0 left-0 right-0 p-8 z-40 pointer-events-none">
+        <div className="max-w-xs mx-auto flex items-center justify-around bg-[#1B2A49] p-4 rounded-[32px] shadow-2xl border border-white/10 pointer-events-auto">
+          <button onClick={() => onNavigate('accueil')} className="flex flex-col items-center text-[#8DC63F] flex-1">
+            <DoorOpen size={20} />
+            <span className="text-[7px] font-black uppercase mt-1">Tableau</span>
+          </button>
+          <div className="h-6 w-[1px] bg-white/10"></div>
+          <button onClick={() => handleNavigateWithNotif('planning-ecurie')} className="flex flex-col items-center text-white/40 flex-1 relative">
+            <Calendar size={20} />
+            <span className="text-[7px] font-black uppercase mt-1">Écurie</span>
+            {notifPlanning && <Badge />}
+          </button>
+          <div className="h-6 w-[1px] bg-white/10"></div>
+          <button onClick={() => onNavigate('planning-monitrices')} className="flex flex-col items-center text-white/40 flex-1">
+            <GraduationCap size={20} />
+            <span className="text-[7px] font-black uppercase mt-1">Cours</span>
+          </button>
+        </div>
+      </footer>
+
       {isAdminOpen && (
-        <div className="fixed inset-0 bg-[#1B2A49]/95 z-50 flex items-end justify-center px-4 backdrop-blur-md">
+        <div className="fixed inset-0 bg-[#1B2A49]/95 z-[100] flex items-end justify-center px-4 backdrop-blur-md">
           <div className="bg-white w-full max-w-md rounded-t-[40px] p-8 pb-10 shadow-2xl overflow-y-auto max-h-[90vh]">
             <div className="flex justify-between items-center mb-6">
               <h2 className="font-black text-2xl uppercase text-[#1B2A49] tracking-tighter">{editingId ? 'Modifier' : 'Nouvelle'} Fiche</h2>
               <button onClick={() => setIsAdminOpen(false)} className="bg-gray-100 p-2 rounded-full text-gray-400"><X size={20}/></button>
             </div>
-            <div className="space-y-5">
+            <div className="space-y-5 text-left">
               <input type="text" value={newTexte} onChange={(e) => setNewTexte(e.target.value)} placeholder="Nom du cheval..." className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold outline-none" />
               <textarea value={newNotes} onChange={(e) => setNewNotes(e.target.value)} placeholder="Notes..." className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold h-20 outline-none" />
               <div className="grid grid-cols-2 gap-2">
@@ -249,26 +258,6 @@ const Accueil = ({ onNavigate }) => {
           </div>
         </div>
       )}
-
-      <footer className="fixed bottom-0 left-0 right-0 p-8 z-40 pointer-events-none">
-        <div className="max-w-xs mx-auto flex items-center justify-around bg-[#1B2A49] p-4 rounded-[32px] shadow-2xl border border-white/10 pointer-events-auto">
-          <button onClick={() => onNavigate('accueil')} className="flex flex-col items-center text-[#8DC63F] flex-1">
-            <DoorOpen size={20} />
-            <span className="text-[7px] font-black uppercase mt-1">Tableau</span>
-          </button>
-          <div className="h-6 w-[1px] bg-white/10"></div>
-          <button onClick={() => onNavigate('planning-ecurie')} className="flex flex-col items-center text-white/40 flex-1 relative">
-            <Calendar size={20} />
-            <span className="text-[7px] font-black uppercase mt-1">Écurie</span>
-            {notifPlanning && <Badge />}
-          </button>
-          <div className="h-6 w-[1px] bg-white/10"></div>
-          <button onClick={() => onNavigate('planning-monitrices')} className="flex flex-col items-center text-white/40 flex-1">
-            <GraduationCap size={20} />
-            <span className="text-[7px] font-black uppercase mt-1">Cours</span>
-          </button>
-        </div>
-      </footer>
     </div>
   );
 };
