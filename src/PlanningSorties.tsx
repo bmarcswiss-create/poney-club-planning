@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, CheckCircle2, Circle, X } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Circle, X, PlusCircle } from 'lucide-react';
 import { supabase } from './supabaseClient';
 
 const PlanningSorties: React.FC<{ onNavigate: (page: string) => void }> = ({ onNavigate }) => {
@@ -10,6 +10,9 @@ const PlanningSorties: React.FC<{ onNavigate: (page: string) => void }> = ({ onN
   const jours = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
   const jourActuel = jours[new Date().getDay()];
   const todayStr = new Date().toLocaleDateString('en-CA');
+
+  // État pour le formulaire d'ajout
+  const [newHorse, setNewHorse] = useState({ nom: '', jour: jourActuel, lieu: 'Manège' });
 
   useEffect(() => {
     fetchSorties();
@@ -28,6 +31,26 @@ const PlanningSorties: React.FC<{ onNavigate: (page: string) => void }> = ({ onN
       .from('planning_sorties')
       .update({ last_done_at: isDoneToday ? null : todayStr })
       .eq('id', id);
+    if (!error) fetchSorties();
+  };
+
+  const ajouterSortie = async () => {
+    if (!newHorse.nom.trim()) return;
+    
+    const { error } = await supabase.from('planning_sorties').insert([{
+      nom_cheval: newHorse.nom.toUpperCase(),
+      jour: newHorse.jour,
+      lieu: newHorse.lieu
+    }]);
+
+    if (!error) {
+      setNewHorse({ ...newHorse, nom: '' }); // Reset le nom après ajout
+      fetchSorties();
+    }
+  };
+
+  const supprimerSortie = async (id: number) => {
+    const { error } = await supabase.from('planning_sorties').delete().eq('id', id);
     if (!error) fetchSorties();
   };
 
@@ -66,17 +89,68 @@ const PlanningSorties: React.FC<{ onNavigate: (page: string) => void }> = ({ onN
             })}
           </div>
         ) : (
-          <div className="space-y-4">
-             {jours.map(j => (
-               <div key={j} className="text-left">
-                 <h4 className="font-black uppercase text-[9px] text-gray-400 mb-2 ml-2 tracking-widest">{j}</h4>
-                 <div className="bg-white p-4 rounded-[25px] flex flex-wrap gap-2 shadow-sm border border-gray-50">
-                    {sorties.filter(s => s.jour?.toLowerCase() === j).map(s => (
-                      <span key={s.id} className="bg-gray-50 px-3 py-1.5 rounded-full text-[10px] font-black text-[#1B2A49] border border-gray-100 uppercase">{s.nom_cheval}</span>
-                    ))}
+          <div className="space-y-6">
+            {/* FORMULAIRE D'AJOUT MANUEL */}
+            <div className="bg-white p-6 rounded-[35px] shadow-xl border-2 border-[#8DC63F]/20 text-left">
+              <h3 className="font-black uppercase text-xs mb-4 flex items-center gap-2">
+                <PlusCircle size={16} className="text-[#8DC63F]" /> Ajouter un cheval
+              </h3>
+              <div className="space-y-3">
+                <input 
+                  type="text" 
+                  value={newHorse.nom} 
+                  onChange={e => setNewHorse({...newHorse, nom: e.target.value})} 
+                  placeholder="NOM DU CHEVAL" 
+                  className="w-full bg-gray-50 p-4 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-[#8DC63F]/30 uppercase" 
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <select 
+                    value={newHorse.jour} 
+                    onChange={e => setNewHorse({...newHorse, jour: e.target.value})} 
+                    className="bg-gray-50 p-3 rounded-xl font-bold text-[10px] uppercase outline-none border-2 border-transparent"
+                  >
+                    {jours.map(j => <option key={j} value={j}>{j}</option>)}
+                  </select>
+                  <select 
+                    value={newHorse.lieu} 
+                    onChange={e => setNewHorse({...newHorse, lieu: e.target.value})} 
+                    className="bg-gray-50 p-3 rounded-xl font-bold text-[10px] uppercase outline-none border-2 border-transparent"
+                  >
+                    <option value="Manège">Manège</option>
+                    <option value="Marcheur">Marcheur</option>
+                  </select>
+                </div>
+                <button 
+                  onClick={ajouterSortie} 
+                  className="w-full bg-[#1B2A49] text-white py-4 rounded-2xl font-black uppercase text-[10px] mt-2 shadow-lg"
+                >
+                  Ajouter au planning
+                </button>
+              </div>
+            </div>
+
+            {/* LISTE RÉCAPITULATIVE DE LA SEMAINE */}
+            <div className="space-y-4">
+               {jours.map(j => (
+                 <div key={j} className="text-left">
+                   <h4 className="font-black uppercase text-[9px] text-gray-400 mb-2 ml-2 tracking-widest">{j}</h4>
+                   <div className="bg-white p-4 rounded-[25px] flex flex-wrap gap-2 shadow-sm border border-gray-50">
+                      {sorties.filter(s => s.jour?.toLowerCase() === j).length === 0 ? (
+                        <span className="text-[8px] text-gray-200 uppercase font-bold p-1 italic">Aucune sortie</span>
+                      ) : (
+                        sorties.filter(s => s.jour?.toLowerCase() === j).map(s => (
+                          <div key={s.id} className="bg-gray-50 pl-3 pr-1 py-1 rounded-full flex items-center gap-1 border border-gray-100">
+                            <span className="text-[9px] font-black text-[#1B2A49] uppercase">{s.nom_cheval}</span>
+                            <button onClick={() => supprimerSortie(s.id)} className="p-1 text-red-300 hover:text-red-500">
+                              <X size={12} />
+                            </button>
+                          </div>
+                        ))
+                      )}
+                   </div>
                  </div>
-               </div>
-             ))}
+               ))}
+            </div>
           </div>
         )}
       </main>
