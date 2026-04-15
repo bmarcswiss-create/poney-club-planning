@@ -37,7 +37,7 @@ const PlanningSorties: React.FC<{ onNavigate: (page: string) => void }> = ({ onN
         <button onClick={() => onNavigate('accueil')} className="absolute top-8 left-6 bg-white/10 p-2 rounded-xl">
           <ArrowLeft size={20} />
         </button>
-        <h1 className="font-black uppercase tracking-tighter text-xl text-white">Planning Sorties</h1>
+        <h1 className="font-black uppercase tracking-tighter text-xl text-white">Sorties Propriétaires</h1>
         <div className="flex bg-white/10 p-1 rounded-2xl mt-6 w-full max-w-[200px] mx-auto">
           <button onClick={() => setView('jour')} className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${view === 'jour' ? 'bg-[#8DC63F] text-[#1B2A49]' : 'text-white'}`}>Jour</button>
           <button onClick={() => setView('semaine')} className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${view === 'semaine' ? 'bg-[#8DC63F] text-[#1B2A49]' : 'text-white'}`}>Semaine</button>

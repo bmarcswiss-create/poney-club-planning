@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, GraduationCap, Plus, X, CheckCircle2, Circle, Trash2, HeartPulse, DoorOpen, Ban, Phone, FileText, Info, Forward, Pill, Edit3, ClipboardList } from 'lucide-react';
+import { Calendar, GraduationCap, Plus, X, CheckCircle2, Circle, Trash2, HeartPulse, DoorOpen, Ban, Phone, FileText, Info, Forward, Pill, Edit3 } from 'lucide-react';
 import { supabase } from './supabaseClient';
 
 const LOGO_URL = "https://lnwvlyswsmtafyoepovq.supabase.co/storage/v1/object/public/logo/logo.png";
@@ -20,7 +20,7 @@ const Accueil = ({ onNavigate }) => {
 
   const joursSemaine = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
   const jourActuel = joursSemaine[new Date().getDay()];
-  const todayStr = new Date().toLocaleDateString('en-CA'); // Format YYYY-MM-DD
+  const todayStr = new Date().toLocaleDateString('en-CA');
 
   const dateInfo = new Intl.DateTimeFormat('fr-FR', { 
     weekday: 'long', day: 'numeric', month: 'long' 
@@ -151,7 +151,7 @@ const Accueil = ({ onNavigate }) => {
       </header>
 
       <main className="w-full max-w-md mx-auto px-6 pt-64">
-        {/* GRILLE DE BOUTONS MISE À JOUR (4 boutons) */}
+        {/* GRILLE DE BOUTONS */}
         <div className="grid grid-cols-4 gap-2 mb-10">
           <button onClick={() => onNavigate('urgences')} className="bg-white p-3 rounded-[24px] shadow-sm border border-red-50 flex flex-col items-center gap-2 relative">
             <div className="bg-red-500 p-2 rounded-xl text-white"><Phone size={16} /></div>
@@ -164,10 +164,12 @@ const Accueil = ({ onNavigate }) => {
             {notifSoins && <Badge />}
           </button>
 
-          {/* NOUVEAU BOUTON PLANNING SORTIES */}
           <button onClick={() => onNavigate('planning-sorties')} className="bg-white p-3 rounded-[24px] shadow-sm border border-green-50 flex flex-col items-center gap-2">
-            <div className="bg-[#8DC63F]/20 p-2 rounded-xl text-[#1B2A49]"><ClipboardList size={16} /></div>
-            <span className="text-[7px] font-black uppercase text-[#1B2A49]">Sorties</span>
+            <div className="bg-[#8DC63F]/20 p-2 rounded-xl text-[#1B2A49]"><DoorOpen size={16} /></div>
+            <div className="flex flex-col items-center">
+              <span className="text-[7px] font-black uppercase text-[#1B2A49] leading-tight">Sorties</span>
+              <span className="text-[6px] font-bold uppercase text-[#8DC63F] leading-tight">Proprios</span>
+            </div>
           </button>
 
           <button onClick={() => onNavigate('documents')} className="bg-white p-3 rounded-[24px] shadow-sm border border-blue-50 flex flex-col items-center gap-2">
@@ -179,7 +181,7 @@ const Accueil = ({ onNavigate }) => {
         {loading ? (
           <div className="flex justify-center p-20 text-gray-300 animate-pulse font-black uppercase text-[10px] tracking-widest text-center">Mise à jour...</div>
         ) : (
-          <div className="space-y-10">
+          <div className="space-y-10 text-left">
             {[
               { id: 'Sortie', label: 'Chevaux à sortir', icon: DoorOpen, color: 'text-blue-500' },
               { id: 'Arret', label: 'Chevaux à l\'arrêt', icon: Ban, color: 'text-orange-500' },
@@ -201,7 +203,7 @@ const Accueil = ({ onNavigate }) => {
             })}
 
             {tasksFuture.length > 0 && (
-              <div className="mt-16 pt-10 border-t-2 border-gray-200/50 text-left">
+              <div className="mt-16 pt-10 border-t-2 border-gray-200/50">
                 <h3 className="flex items-center gap-2 font-black text-[11px] uppercase tracking-[0.2em] mb-6 ml-2 text-gray-400">
                   <Forward size={16} /> Prévisions pour la semaine
                 </h3>
