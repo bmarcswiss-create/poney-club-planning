@@ -10,6 +10,7 @@ const Accueil = ({ onNavigate }) => {
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [showAlert, setShowAlert] = useState(false);
+  const [lastSection, setLastSection] = useState(''); // Pour stocker le nom de la section
   
   const [notifSoins, setNotifSoins] = useState(false);
   const [notifPlanning, setNotifPlanning] = useState(false);
@@ -35,8 +36,22 @@ const Accueil = ({ onNavigate }) => {
     if (!error && data) {
       setConsignes(data);
       const lastCheck = localStorage.getItem('consignes_last_check') || "0";
-      const mostRecent = data.length > 0 ? new Date(data[0].created_at).getTime() : 0;
-      if (mostRecent > parseInt(lastCheck)) setShowAlert(true);
+      const mostRecentTask = data[0];
+      
+      if (mostRecentTask) {
+        const mostRecentTime = new Date(mostRecentTask.created_at).getTime();
+        if (mostRecentTime > parseInt(lastCheck)) {
+          // On traduit l'ID de la section pour l'affichage
+          const sectionNames = {
+            'Sortie': 'Club',
+            'Arret': 'À l\'arrêt',
+            'Soins': 'Soins',
+            'Autres': 'Autres'
+          };
+          setLastSection(sectionNames[mostRecentTask.section] || mostRecentTask.section);
+          setShowAlert(true);
+        }
+      }
     }
     setLoading(false);
   };
@@ -112,7 +127,7 @@ const Accueil = ({ onNavigate }) => {
             <button onClick={() => supprimerTache(t.id)} className="text-gray-200 p-2"><Trash2 size={16} /></button>
           </div>
         </div>
-        {t.notes && <div className="mt-2 ml-10 p-2 bg-gray-50 rounded-xl border-l-4 border-[#8DC63F]/30 text-[11px] text-gray-600 italic text-left">{t.notes}</div>}
+        {t.notes && <div className="mt-2 ml-10 p-2 bg-gray-50 rounded-xl border-l-4 border-[#8DC63F]/30 text-[11px] font-medium text-gray-600 italic text-left">{t.notes}</div>}
       </div>
     );
   };
@@ -129,7 +144,12 @@ const Accueil = ({ onNavigate }) => {
       <main className="w-full max-w-md mx-auto px-6 pt-64">
         {showAlert && (
           <div className="mb-6 bg-[#8DC63F] p-4 rounded-[25px] flex items-center justify-between shadow-lg">
-            <div className="flex items-center gap-3"><BellRing size={20} className="text-[#1B2A49]" /><span className="text-[11px] font-black uppercase text-[#1B2A49]">Nouvelle tâche ajoutée !</span></div>
+            <div className="flex items-center gap-3">
+              <BellRing size={20} className="text-[#1B2A49]" />
+              <span className="text-[11px] font-black uppercase text-[#1B2A49]">
+                Nouvelle tâche : <span className="underline">{lastSection}</span> !
+              </span>
+            </div>
             <button onClick={closeAlert} className="bg-[#1B2A49] text-white p-1.5 rounded-full"><X size={14} /></button>
           </div>
         )}
