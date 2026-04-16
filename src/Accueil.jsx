@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, GraduationCap, Plus, X, CheckCircle2, Circle, Trash2, HeartPulse, DoorOpen, Ban, Phone, FileText, Info, Forward, Pill, Edit3, BellRing, AlertTriangle } from 'lucide-react';
+import { Calendar, GraduationCap, Plus, X, CheckCircle2, Circle, Trash2, HeartPulse, DoorOpen, Ban, Phone, FileText, Info, Forward, Pill, Edit3, BellRing, AlertTriangle, Archive, Star } from 'lucide-react';
 import { supabase } from './supabaseClient';
 
 const LOGO_URL = "https://lnwvlyswsmtafyoepovq.supabase.co/storage/v1/object/public/logo/logo.png";
@@ -12,6 +12,10 @@ const Accueil = ({ onNavigate }) => {
   const [showAlert, setShowAlert] = useState(false);
   const [alertType, setAlertType] = useState('');
   
+  // États pour la victoire des sorties Propriétaires
+  const [sortiesDone, setSortiesDone] = useState(false);
+  const [statsSorties, setStatsSorties] = useState({ total: 0, fait: 0 });
+
   const [notifSoins, setNotifSoins] = useState(false);
   const [notifPlanning, setNotifPlanning] = useState(false);
 
@@ -30,6 +34,7 @@ const Accueil = ({ onNavigate }) => {
   useEffect(() => {
     fetchDataAndCheckAlerts();
     checkNotifications();
+    checkSortiesProprios();
   }, []);
 
   const fetchDataAndCheckAlerts = async () => {
@@ -53,6 +58,18 @@ const Accueil = ({ onNavigate }) => {
     setLoading(false);
   };
 
+  const checkSortiesProprios = async () => {
+    const jourMajuscule = jourActuel.charAt(0).toUpperCase() + jourActuel.slice(1);
+    const { data } = await supabase.from('planning_sorties').select('last_done_at, est_fait').eq('jour', jourMajuscule);
+
+    if (data && data.length > 0) {
+      const total = data.length;
+      const fait = data.filter(s => s.last_done_at === todayStr || s.est_fait === true).length;
+      setStatsSorties({ total, fait });
+      setSortiesDone(total > 0 && total === fait);
+    }
+  };
+
   const closeAlert = () => { setShowAlert(false); localStorage.setItem('consignes_last_check', Date.now().toString()); };
 
   const checkNotifications = async () => {
@@ -74,14 +91,7 @@ const Accueil = ({ onNavigate }) => {
 
   const enregistrerTache = async () => {
     if (!newTexte.trim()) return;
-    const payload = { 
-        texte: newTexte, 
-        notes: newNotes, 
-        section: selectedSection, 
-        jour_semaine: selectedDay || null,
-        attribution: selectedAttribution,
-        est_urgent: isUrgent
-    };
+    const payload = { texte: newTexte, notes: newNotes, section: selectedSection, jour_semaine: selectedDay || null, attribution: selectedAttribution, est_urgent: isUrgent };
     if (editingId) { await supabase.from('consignes').update(payload).eq('id', editingId); }
     else { await supabase.from('consignes').insert([{ ...payload, est_fait: false, last_done_at: null }]); }
     fetchDataAndCheckAlerts();
@@ -104,33 +114,26 @@ const Accueil = ({ onNavigate }) => {
 
   const Badge = () => (<span className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full border-2 border-white"></span>);
 
-  const tasksActive = consignes.filter(t => !t.jour_semaine || t.jour_semaine === jourActuel || t.jour_semaine === 'permanent' || t.jour_semaine === 'execution');
-  const tasksFuture = consignes.filter(t => t.jour_semaine && t.jour_semaine !== jourActuel && t.jour_semaine !== 'permanent' && t.jour_semaine !== 'execution');
+  const tasksActive = consignes.filter(t => t.last_done_at !== todayStr && (!t.jour_semaine || t.jour_semaine === jourActuel || t.jour_semaine === 'permanent' || t.jour_semaine === 'execution'));
+  const tasksArchived = consignes.filter(t => t.last_done_at === todayStr);
+  const tasksFuture = consignes.filter(t => t.last_done_at !== todayStr && t.jour_semaine && t.jour_semaine !== jourActuel && t.jour_semaine !== 'permanent' && t.jour_semaine !== 'execution');
 
-  const TaskCard = ({ t, isActive }) => {
+  const TaskCard = ({ t, isActive, isArchivedView = false }) => {
     const estFaitAujourdhui = t.last_done_at === todayStr;
-    const getDuréeLabel = (val) => {
-        if (val === 'permanent') return "Jusqu'à rétablissement";
-        if (val === 'execution') return "Jusqu'à exécution";
-        if (!val) return "Aujourd'hui";
-        return `Chaque ${val}`;
-    };
-
     return (
-      <div className={`flex flex-col p-4 rounded-3xl border-2 transition-all shadow-sm relative overflow-hidden ${isActive ? (t.est_urgent ? 'bg-red-50 border-red-500 shadow-red-100' : 'bg-white border-white') : 'bg-white/40 border-transparent opacity-60'}`}>
-        {t.est_urgent && isActive && <div className="absolute top-0 right-0 bg-red-500 text-white text-[7px] font-black px-3 py-1 rounded-bl-xl animate-pulse flex items-center gap-1"><AlertTriangle size={8}/> URGENT</div>}
-        
+      <div className={`flex flex-col p-4 rounded-3xl border-2 transition-all shadow-sm relative overflow-hidden ${isArchivedView ? 'bg-gray-100/50 border-transparent opacity-60 scale-[0.98]' : isActive ? (t.est_urgent ? 'bg-red-50 border-red-500 shadow-red-100' : 'bg-white border-white') : 'bg-white/40 opacity-60'}`}>
+        {t.est_urgent && isActive && !isArchivedView && <div className="absolute top-0 right-0 bg-red-500 text-white text-[7px] font-black px-3 py-1 rounded-bl-xl animate-pulse flex items-center gap-1"><AlertTriangle size={8}/> URGENT</div>}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4 flex-1" onClick={() => toggleTache(t.id, t.last_done_at, isActive)}>
-            {isActive ? (estFaitAujourdhui ? <CheckCircle2 className="text-[#8DC63F]" size={22} /> : <Circle className={t.est_urgent ? "text-red-300" : "text-gray-300"} size={22} />) : <Calendar className="text-gray-400" size={18} />}
+            {estFaitAujourdhui ? <CheckCircle2 className="text-gray-400" size={22} /> : (isActive ? <Circle className={t.est_urgent ? "text-red-300" : "text-gray-300"} size={22} /> : <Calendar className="text-gray-400" size={18} />)}
             <div className="flex flex-col text-left">
-              <span className={`text-[15px] font-black leading-tight ${estFaitAujourdhui ? 'line-through text-gray-400 opacity-50' : 'text-[#1B2A49]'}`}>{t.texte}</span>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-[9px] font-black uppercase text-[#8DC63F]">{getDuréeLabel(t.jour_semaine)}</span>
-                <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${t.attribution === 'Palefreniers' ? 'bg-blue-100 text-blue-700' : t.attribution === 'Monitrices' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'}`}>
-                    {t.attribution || 'Tous'}
-                </span>
-              </div>
+              <span className={`text-[15px] font-black leading-tight ${estFaitAujourdhui ? 'line-through text-gray-400' : 'text-[#1B2A49]'}`}>{t.texte}</span>
+              {!isArchivedView && (
+                <div className="flex items-center gap-2 mt-1">
+                    <span className="text-[9px] font-black uppercase text-[#8DC63F]">{!t.jour_semaine ? "Aujourd'hui" : t.jour_semaine === 'permanent' ? "Rétablissement" : t.jour_semaine === 'execution' ? "Ponctuel" : t.jour_semaine}</span>
+                    <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${t.attribution === 'Palefreniers' ? 'bg-blue-100 text-blue-700' : t.attribution === 'Monitrices' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'}`}>{t.attribution || 'Tous'}</span>
+                </div>
+              )}
             </div>
           </div>
           <div className="flex gap-1">
@@ -138,7 +141,7 @@ const Accueil = ({ onNavigate }) => {
             <button onClick={() => supprimerTache(t.id)} className="text-gray-200 p-2"><Trash2 size={16} /></button>
           </div>
         </div>
-        {t.notes && <div className="mt-2 ml-10 p-2 bg-gray-50/50 rounded-xl border-l-4 border-[#8DC63F]/30 text-[11px] font-medium text-gray-600 italic text-left">{t.notes}</div>}
+        {t.notes && !isArchivedView && <div className="mt-2 ml-10 p-2 bg-gray-50/50 rounded-xl border-l-4 border-[#8DC63F]/30 text-[11px] font-medium text-gray-600 italic text-left">{t.notes}</div>}
       </div>
     );
   };
@@ -167,9 +170,26 @@ const Accueil = ({ onNavigate }) => {
         </div>
 
         <div className="space-y-10">
-          <h2 className="font-black text-[12px] uppercase tracking-[0.3em] text-[#1B2A49] ml-2 -mb-6 italic opacity-50">Tâches du jour</h2>
-          <div onClick={() => onNavigate('planning-sorties')} className="bg-white border-2 border-[#8DC63F] p-5 rounded-[35px] flex items-center justify-between shadow-sm cursor-pointer active:scale-95 transition-transform"><div className="flex items-center gap-4"><div className="bg-[#8DC63F]/10 p-2.5 rounded-2xl text-[#1B2A49]"><DoorOpen size={24} /></div><div className="flex flex-col"><span className="text-[14px] font-black text-[#1B2A49] uppercase">Sorties Propriétaires</span><span className="text-[9px] font-bold text-[#8DC63F] uppercase">Voir le planning complet</span></div></div><Forward size={20} className="text-[#1B2A49]" /></div>
+          {/* BANDEAU VICTOIRE PRÉCIS SUR LES PROPRIÉTAIRES */}
+          <div onClick={() => onNavigate('planning-sorties')} className={`p-5 rounded-[35px] flex items-center justify-between shadow-sm cursor-pointer transition-all duration-500 border-2 ${sortiesDone ? 'bg-[#8DC63F] border-[#8DC63F] scale-[1.02]' : 'bg-white border-[#8DC63F]'}`}>
+            <div className="flex items-center gap-4">
+              <div className={`p-2.5 rounded-2xl ${sortiesDone ? 'bg-white text-[#1B2A49]' : 'bg-[#8DC63F]/10 text-[#1B2A49]'}`}>
+                {sortiesDone ? <Star size={24} className="fill-current" /> : <DoorOpen size={24} />}
+              </div>
+              <div className="flex flex-col">
+                <span className={`text-[14px] font-black uppercase ${sortiesDone ? 'text-white' : 'text-[#1B2A49]'}`}>
+                  {sortiesDone ? '🌟 LISTE PROPRIOS TERMINÉE' : 'Sorties Propriétaires'}
+                </span>
+                <span className={`text-[9px] font-bold uppercase ${sortiesDone ? 'text-white/80' : 'text-[#8DC63F]'}`}>
+                  {sortiesDone ? 'Tous les chevaux de proprio sont sortis !' : `${statsSorties.fait} / ${statsSorties.total} chevaux sortis`}
+                </span>
+              </div>
+            </div>
+            <div className={sortiesDone ? 'text-white' : 'text-[#1B2A49]'}><Forward size={20} /></div>
+          </div>
 
+          <h2 className="font-black text-[12px] uppercase tracking-[0.3em] text-[#1B2A49] ml-2 -mb-6 italic opacity-50">Tâches à faire</h2>
+          
           {loading ? ( <div className="text-center p-10 opacity-20 font-black uppercase text-[10px]">Chargement...</div> ) : (
             <>
               {[
@@ -187,10 +207,26 @@ const Accueil = ({ onNavigate }) => {
                   </div>
                 );
               })}
+
               {tasksFuture.length > 0 && (
-                <div className="mt-16 pt-10 border-t-2 border-gray-200/50">
-                  <h3 className="flex items-center gap-2 font-black text-[10px] uppercase tracking-[0.2em] mb-6 ml-2 text-gray-400"><Forward size={14} /> Prévisions pour la semaine</h3>
+                <div className="mt-16 pt-10 border-t-2 border-gray-200/50 opacity-40">
+                  <h3 className="flex items-center gap-2 font-black text-[10px] uppercase tracking-[0.2em] mb-6 ml-2 text-gray-400"><Forward size={14} /> Prévisions de la semaine</h3>
                   <div className="space-y-3">{tasksFuture.map(t => <TaskCard key={t.id} t={t} isActive={false} />)}</div>
+                </div>
+              )}
+
+              {(tasksArchived.length > 0 || sortiesDone) && (
+                <div className="mt-16 pt-10 border-t-2 border-gray-200/50 pb-10">
+                  <h3 className="flex items-center gap-2 font-black text-[10px] uppercase tracking-[0.2em] mb-6 ml-2 text-gray-400"><Archive size={14} /> Terminé aujourd'hui</h3>
+                  <div className="space-y-3">
+                    {sortiesDone && (
+                        <div className="bg-gray-100/50 p-4 rounded-3xl border-2 border-transparent flex items-center gap-4 opacity-60 scale-[0.98]">
+                            <CheckCircle2 className="text-gray-400" size={22} />
+                            <span className="text-[13px] font-black text-gray-400 uppercase tracking-tighter">✅ Chevaux Propriétaires : OK</span>
+                        </div>
+                    )}
+                    {tasksArchived.map(t => <TaskCard key={t.id} t={t} isActive={true} isArchivedView={true} />)}
+                  </div>
                 </div>
               )}
             </>
@@ -198,6 +234,18 @@ const Accueil = ({ onNavigate }) => {
         </div>
       </main>
 
+      {/* Navigation Footer */}
+      <footer className="fixed bottom-0 left-0 right-0 p-8 z-40 pointer-events-none text-center">
+        <div className="max-w-xs mx-auto flex items-center justify-around bg-[#1B2A49] p-4 rounded-[32px] shadow-2xl border border-white/10 pointer-events-auto">
+          <button onClick={() => onNavigate('accueil')} className="flex flex-col items-center text-[#8DC63F] flex-1"><DoorOpen size={20} /><span className="text-[7px] font-black uppercase mt-1">Tableau</span></button>
+          <div className="h-6 w-[1px] bg-white/10"></div>
+          <button onClick={() => handleNavigateWithNotif('planning-ecurie')} className="flex flex-col items-center text-white/40 flex-1 relative"><Calendar size={20} /><span className="text-[7px] font-black uppercase mt-1">Écurie</span>{notifPlanning && <Badge />}</button>
+          <div className="h-6 w-[1px] bg-white/10"></div>
+          <button onClick={() => onNavigate('planning-monitrices')} className="flex flex-col items-center text-white/40 flex-1"><GraduationCap size={20} /><span className="text-[7px] font-black uppercase mt-1">Cours</span></button>
+        </div>
+      </footer>
+
+      {/* Modal d'ajout de tâche */}
       {isAdminOpen && (
         <div className="fixed inset-0 bg-[#1B2A49]/95 z-[100] flex items-end justify-center px-4 backdrop-blur-md">
           <div className="bg-white w-full max-w-md rounded-t-[40px] p-8 pb-10 shadow-2xl text-left overflow-y-auto max-h-[95vh]">
@@ -209,39 +257,19 @@ const Accueil = ({ onNavigate }) => {
               </div>
               <input type="text" value={newTexte} onChange={(e) => setNewTexte(e.target.value)} placeholder="Nom..." className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold outline-none" />
               <textarea value={newNotes} onChange={(e) => setNewNotes(e.target.value)} placeholder="Détails..." className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold h-20 outline-none" />
-              <div className="space-y-2">
-                <label className="text-[9px] font-black uppercase text-gray-400 ml-2">Assigner à :</label>
-                <div className="grid grid-cols-3 gap-2">
-                    {['Palefreniers', 'Monitrices', 'Tous'].map(a => (
-                        <button key={a} onClick={() => setSelectedAttribution(a)} className={`py-3 rounded-xl text-[8px] font-black uppercase transition-all ${selectedAttribution === a ? 'bg-[#1B2A49] text-white' : 'bg-gray-50 text-gray-400'}`}>{a}</button>
-                    ))}
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {['Sortie', 'Arret', 'Soins', 'Autres'].map(s => <button key={s} onClick={() => setSelectedSection(s)} className={`py-3 rounded-xl text-[9px] font-black uppercase ${selectedSection === s ? 'bg-[#1B2A49] text-white shadow-md' : 'bg-gray-50 text-gray-400'}`}>{s}</button>)}
-              </div>
+              <div className="space-y-2"><label className="text-[9px] font-black uppercase text-gray-400 ml-2">Assigner à :</label><div className="grid grid-cols-3 gap-2">{['Palefreniers', 'Monitrices', 'Tous'].map(a => (<button key={a} onClick={() => setSelectedAttribution(a)} className={`py-3 rounded-xl text-[8px] font-black uppercase transition-all ${selectedAttribution === a ? 'bg-[#1B2A49] text-white' : 'bg-gray-50 text-gray-400'}`}>{a}</button>))}</div></div>
+              <div className="grid grid-cols-2 gap-2">{['Sortie', 'Arret', 'Soins', 'Autres'].map(s => <button key={s} onClick={() => setSelectedSection(s)} className={`py-3 rounded-xl text-[9px] font-black uppercase ${selectedSection === s ? 'bg-[#1B2A49] text-white' : 'bg-gray-50 text-gray-400'}`}>{s}</button>)}</div>
               <select value={selectedDay} onChange={(e) => setSelectedDay(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold">
-                <option value="">Aujourd'hui</option>
-                <option value="execution">Jusqu'à exécution</option>
+                <option value="">Aujourd'hui seulement</option>
+                <option value="execution">Ponctuel (jusqu'à exécution)</option>
                 <option value="permanent">Jusqu'à rétablissement</option>
                 {joursSemaine.map(j => <option key={j} value={j}>{j}</option>)}
               </select>
               <button onClick={enregistrerTache} className="w-full bg-[#8DC63F] text-[#1B2A49] py-5 rounded-3xl font-black uppercase shadow-lg">Enregistrer</button>
-              <button onClick={() => setIsAdminOpen(false)} className="w-full py-2 text-center text-gray-400 font-bold text-[10px] uppercase">Annuler</button>
             </div>
           </div>
         </div>
       )}
-
-      <footer className="fixed bottom-0 left-0 right-0 p-8 z-40 pointer-events-none text-center">
-        <div className="max-w-xs mx-auto flex items-center justify-around bg-[#1B2A49] p-4 rounded-[32px] shadow-2xl border border-white/10 pointer-events-auto">
-          <button onClick={() => onNavigate('accueil')} className="flex flex-col items-center text-[#8DC63F] flex-1"><DoorOpen size={20} /><span className="text-[7px] font-black uppercase mt-1">Tableau</span></button>
-          <div className="h-6 w-[1px] bg-white/10"></div>
-          <button onClick={() => handleNavigateWithNotif('planning-ecurie')} className="flex flex-col items-center text-white/40 flex-1 relative"><Calendar size={20} /><span className="text-[7px] font-black uppercase mt-1">Écurie</span>{notifPlanning && <Badge />}</button>
-          <div className="h-6 w-[1px] bg-white/10"></div>
-          <button onClick={() => onNavigate('planning-monitrices')} className="flex flex-col items-center text-white/40 flex-1"><GraduationCap size={20} /><span className="text-[7px] font-black uppercase mt-1">Cours</span></button>
-        </div>
-      </footer>
     </div>
   );
 };
