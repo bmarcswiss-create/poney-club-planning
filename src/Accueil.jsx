@@ -10,7 +10,7 @@ const Accueil = ({ onNavigate }) => {
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [showAlert, setShowAlert] = useState(false);
-  const [lastSection, setLastSection] = useState(''); // Pour stocker le nom de la section
+  const [alertType, setAlertType] = useState(''); // Pour stocker le type (Soin, Doc, etc.)
   
   const [notifSoins, setNotifSoins] = useState(false);
   const [notifPlanning, setNotifPlanning] = useState(false);
@@ -26,33 +26,46 @@ const Accueil = ({ onNavigate }) => {
   const dateInfo = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date());
 
   useEffect(() => {
-    fetchConsignes();
+    fetchDataAndCheckAlerts();
     checkNotifications();
   }, []);
 
-  const fetchConsignes = async () => {
+  const fetchDataAndCheckAlerts = async () => {
     setLoading(true);
-    const { data, error } = await supabase.from('consignes').select('*').order('created_at', { ascending: false });
-    if (!error && data) {
-      setConsignes(data);
-      const lastCheck = localStorage.getItem('consignes_last_check') || "0";
-      const mostRecentTask = data[0];
-      
-      if (mostRecentTask) {
-        const mostRecentTime = new Date(mostRecentTask.created_at).getTime();
-        if (mostRecentTime > parseInt(lastCheck)) {
-          // On traduit l'ID de la section pour l'affichage
-          const sectionNames = {
-            'Sortie': 'Club',
-            'Arret': 'À l\'arrêt',
-            'Soins': 'Soins',
-            'Autres': 'Autres'
-          };
-          setLastSection(sectionNames[mostRecentTask.section] || mostRecentTask.section);
-          setShowAlert(true);
+    const lastCheck = parseInt(localStorage.getItem('consignes_last_check') || "0");
+    
+    // 1. Récupérer les consignes pour l'affichage
+    const { data: dataConsignes } = await supabase.from('consignes').select('*').order('created_at', { ascending: false });
+    if (dataConsignes) setConsignes(dataConsignes);
+
+    // 2. Vérifier les dates les plus récentes dans les 4 tables
+    const tables = [
+      { name: 'consignes', label: 'Tâche' },
+      { name: 'soins', label: 'Soin' },
+      { name: 'urgences', label: 'Urgence' },
+      { name: 'documents', label: 'Document' }
+    ];
+
+    let mostRecentTime = 0;
+    let mostRecentLabel = '';
+
+    for (const table of tables) {
+      const { data } = await supabase.from(table.name).select('created_at').order('created_at', { ascending: false }).limit(1);
+      if (data?.[0]) {
+        const time = new Date(data[0].created_at).getTime();
+        if (time > mostRecentTime) {
+          mostRecentTime = time;
+          mostRecentLabel = table.label;
         }
       }
     }
+
+    // 3. Afficher l'alerte si le plus récent est après notre dernier check
+    if (mostRecentTime > lastCheck) {
+      setAlertType(mostRecentLabel);
+      setShowAlert(true);
+    }
+    
     setLoading(false);
   };
 
@@ -65,8 +78,10 @@ const Accueil = ({ onNavigate }) => {
     try {
       const lastVisitSoins = localStorage.getItem('lastVisitSoins') || "0";
       const lastVisitPlanning = localStorage.getItem('lastVisitPlanning') || "0";
+      
       const { data: lastSoin } = await supabase.from('soins').select('created_at').order('created_at', { ascending: false }).limit(1);
       if (lastSoin?.[0] && new Date(lastSoin[0].created_at).getTime() > parseInt(lastVisitSoins)) setNotifSoins(true);
+      
       const { data: lastState } = await supabase.from('app_state').select('created_at').order('created_at', { ascending: false }).limit(1);
       if (lastState?.[0] && new Date(lastState[0].created_at).getTime() > parseInt(lastVisitPlanning)) setNotifPlanning(true);
     } catch (e) { console.log(e); }
@@ -83,7 +98,7 @@ const Accueil = ({ onNavigate }) => {
     const payload = { texte: newTexte, notes: newNotes, section: selectedSection, jour_semaine: selectedDay || null };
     if (editingId) { await supabase.from('consignes').update(payload).eq('id', editingId); }
     else { await supabase.from('consignes').insert([{ ...payload, est_fait: false, last_done_at: null }]); }
-    fetchConsignes();
+    fetchDataAndCheckAlerts();
     setIsAdminOpen(false);
   };
 
@@ -91,13 +106,13 @@ const Accueil = ({ onNavigate }) => {
     if (!isActive) return;
     const isDoneToday = currentLastDone === todayStr;
     await supabase.from('consignes').update({ last_done_at: isDoneToday ? null : todayStr }).eq('id', id);
-    fetchConsignes();
+    fetchDataAndCheckAlerts();
   };
 
   const supprimerTache = async (id) => {
     if (window.confirm("Supprimer cette fiche ?")) {
       await supabase.from('consignes').delete().eq('id', id);
-      fetchConsignes();
+      fetchDataAndCheckAlerts();
     }
   };
 
@@ -147,7 +162,7 @@ const Accueil = ({ onNavigate }) => {
             <div className="flex items-center gap-3">
               <BellRing size={20} className="text-[#1B2A49]" />
               <span className="text-[11px] font-black uppercase text-[#1B2A49]">
-                Nouvelle tâche : <span className="underline">{lastSection}</span> !
+                Nouveau : <span className="underline">{alertType}</span> ajouté !
               </span>
             </div>
             <button onClick={closeAlert} className="bg-[#1B2A49] text-white p-1.5 rounded-full"><X size={14} /></button>
