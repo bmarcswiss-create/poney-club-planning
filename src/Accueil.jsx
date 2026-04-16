@@ -102,7 +102,9 @@ const Accueil = ({ onNavigate }) => {
             {isActive ? (estFaitAujourdhui ? <CheckCircle2 className="text-[#8DC63F]" size={22} /> : <Circle className="text-gray-300" size={22} />) : <Calendar className="text-gray-400" size={18} />}
             <div className="flex flex-col text-left">
               <span className={`text-[15px] font-black leading-tight ${estFaitAujourdhui ? 'line-through text-gray-400 opacity-50' : 'text-[#1B2A49]'}`}>{t.texte}</span>
-              <span className="text-[9px] font-black uppercase text-[#8DC63F] mt-0.5">{t.jour_semaine === 'permanent' ? "Permanent" : !t.jour_semaine ? "Aujourd'hui" : `Chaque ${t.jour_semaine}`}</span>
+              <span className="text-[9px] font-black uppercase text-[#8DC63F] mt-0.5">
+                {t.jour_semaine === 'permanent' ? "Jusqu'à rétablissement" : !t.jour_semaine ? "Aujourd'hui" : `Chaque ${t.jour_semaine}`}
+              </span>
             </div>
           </div>
           <div className="flex gap-1">
@@ -133,10 +135,10 @@ const Accueil = ({ onNavigate }) => {
         )}
 
         <div className="grid grid-cols-4 gap-2 mb-10">
-          <button onClick={() => onNavigate('urgences')} className="bg-white p-3 rounded-[24px] shadow-sm flex flex-col items-center gap-2"><div className="bg-red-500 p-2 rounded-xl text-white"><Phone size={16} /></div><span className="text-[7px] font-black uppercase text-[#1B2A49]">Urgences</span></button>
-          <button onClick={() => handleNavigateWithNotif('soins')} className="bg-white p-3 rounded-[24px] shadow-sm flex flex-col items-center gap-2 relative"><div className="bg-red-100 p-2 rounded-xl text-red-600"><Pill size={16} /></div><span className="text-[7px] font-black uppercase text-[#1B2A49]">Soins</span>{notifSoins && <Badge />}</button>
-          <button onClick={() => onNavigate('planning-sorties')} className="bg-white p-3 rounded-[24px] shadow-sm flex flex-col items-center gap-2"><div className="bg-[#8DC63F]/20 p-2 rounded-xl text-[#1B2A49]"><DoorOpen size={16} /></div><span className="text-[7px] font-black uppercase text-[#1B2A49] text-center">Sorties Proprios</span></button>
-          <button onClick={() => onNavigate('documents')} className="bg-white p-3 rounded-[24px] shadow-sm flex flex-col items-center gap-2"><div className="bg-[#1B2A49] p-2 rounded-xl text-white"><FileText size={16} /></div><span className="text-[7px] font-black uppercase text-[#1B2A49]">Docs</span></button>
+          <button onClick={() => onNavigate('urgences')} className="bg-white p-3 rounded-[24px] flex flex-col items-center gap-2 shadow-sm"><div className="bg-red-500 p-2 rounded-xl text-white"><Phone size={16} /></div><span className="text-[7px] font-black uppercase text-[#1B2A49]">Urgences</span></button>
+          <button onClick={() => handleNavigateWithNotif('soins')} className="bg-white p-3 rounded-[24px] flex flex-col items-center gap-2 relative shadow-sm"><div className="bg-red-100 p-2 rounded-xl text-red-600"><Pill size={16} /></div><span className="text-[7px] font-black uppercase text-[#1B2A49]">Soins</span>{notifSoins && <Badge />}</button>
+          <button onClick={() => onNavigate('planning-sorties')} className="bg-white p-3 rounded-[24px] flex flex-col items-center gap-2 shadow-sm"><div className="bg-[#8DC63F]/20 p-2 rounded-xl text-[#1B2A49]"><DoorOpen size={16} /></div><span className="text-[7px] font-black uppercase text-[#1B2A49] text-center">Sorties Proprios</span></button>
+          <button onClick={() => onNavigate('documents')} className="bg-white p-3 rounded-[24px] flex flex-col items-center gap-2 shadow-sm"><div className="bg-[#1B2A49] p-2 rounded-xl text-white"><FileText size={16} /></div><span className="text-[7px] font-black uppercase text-[#1B2A49]">Docs</span></button>
         </div>
 
         <div className="space-y-10">
@@ -159,7 +161,7 @@ const Accueil = ({ onNavigate }) => {
                 if (tasks.length === 0) return null;
                 return (
                   <div key={section.id} className="pt-2">
-                    <h3 className={`flex items-center gap-2 font-black text-[11px] uppercase tracking-[0.2em] mb-4 ml-2 ${section.color}`}>
+                    <h3 className={`flex items-center gap-2 font-black text-[10px] uppercase tracking-[0.2em] mb-4 ml-2 ${section.color}`}>
                        {section.id === 'Sortie' ? <span className="bg-blue-600 text-white px-2 py-0.5 rounded-lg text-[10px] mr-1">CLUB</span> : <section.icon size={14} />} 
                        {section.label}
                     </h3>
@@ -201,11 +203,10 @@ const Accueil = ({ onNavigate }) => {
               </div>
               <select value={selectedDay} onChange={(e) => setSelectedDay(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold">
                 <option value="">Aujourd'hui</option>
-                <option value="permanent">Permanent</option>
+                <option value="permanent">Jusqu'à rétablissement</option>
                 {joursSemaine.map(j => <option key={j} value={j}>{j}</option>)}
               </select>
               <button onClick={enregistrerTache} className="w-full bg-[#8DC63F] text-[#1B2A49] py-5 rounded-3xl font-black uppercase shadow-lg">Enregistrer</button>
-              <button onClick={() => setIsAdminOpen(false)} className="w-full text-center text-gray-400 font-bold text-[10px] uppercase">Annuler</button>
             </div>
           </div>
         </div>
