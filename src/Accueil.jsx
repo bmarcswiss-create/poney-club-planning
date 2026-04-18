@@ -12,7 +12,6 @@ const Accueil = ({ onNavigate }) => {
   const [showAlert, setShowAlert] = useState(false);
   const [alertType, setAlertType] = useState('');
   
-  // États pour la victoire des sorties Propriétaires
   const [sortiesDone, setSortiesDone] = useState(false);
   const [statsSorties, setStatsSorties] = useState({ total: 0, fait: 0 });
 
@@ -28,6 +27,7 @@ const Accueil = ({ onNavigate }) => {
 
   const joursSemaine = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
   const jourActuel = joursSemaine[new Date().getDay()];
+  const isWeekDay = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi'].includes(jourActuel);
   const todayStr = new Date().toLocaleDateString('en-CA');
   const dateInfo = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date());
 
@@ -61,7 +61,6 @@ const Accueil = ({ onNavigate }) => {
   const checkSortiesProprios = async () => {
     const jourMajuscule = jourActuel.charAt(0).toUpperCase() + jourActuel.slice(1);
     const { data } = await supabase.from('planning_sorties').select('last_done_at, est_fait').eq('jour', jourMajuscule);
-
     if (data && data.length > 0) {
       const total = data.length;
       const fait = data.filter(s => s.last_done_at === todayStr || s.est_fait === true).length;
@@ -114,14 +113,37 @@ const Accueil = ({ onNavigate }) => {
 
   const Badge = () => (<span className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full border-2 border-white"></span>);
 
-  const tasksActive = consignes.filter(t => t.last_done_at !== todayStr && (!t.jour_semaine || t.jour_semaine === jourActuel || t.jour_semaine === 'permanent' || t.jour_semaine === 'execution'));
+  // LOGIQUE DE FILTRAGE AMÉLIORÉE
+  const tasksActive = consignes.filter(t => {
+    if (t.last_done_at === todayStr) return false;
+    if (!t.jour_semaine) return true;
+    if (t.jour_semaine === 'permanent' || t.jour_semaine === 'execution') return true;
+    if (t.jour_semaine === 'semaine' && isWeekDay) return true;
+    if (t.jour_semaine === jourActuel) return true;
+    return false;
+  });
+
   const tasksArchived = consignes.filter(t => t.last_done_at === todayStr);
-  const tasksFuture = consignes.filter(t => t.last_done_at !== todayStr && t.jour_semaine && t.jour_semaine !== jourActuel && t.jour_semaine !== 'permanent' && t.jour_semaine !== 'execution');
+  
+  const tasksFuture = consignes.filter(t => {
+    if (t.last_done_at === todayStr) return false;
+    if (!t.jour_semaine || t.jour_semaine === 'permanent' || t.jour_semaine === 'execution') return false;
+    if (t.jour_semaine === 'semaine') return !isWeekDay;
+    return t.jour_semaine !== jourActuel;
+  });
 
   const TaskCard = ({ t, isActive, isArchivedView = false }) => {
     const estFaitAujourdhui = t.last_done_at === todayStr;
+    const getDayLabel = (val) => {
+      if (!val) return "Aujourd'hui";
+      if (val === 'semaine') return "Lun. au Ven.";
+      if (val === 'permanent') return "Rétablissement";
+      if (val === 'execution') return "Ponctuel";
+      return val;
+    };
+
     return (
-      <div className={`flex flex-col p-4 rounded-3xl border-2 transition-all shadow-sm relative overflow-hidden ${isArchivedView ? 'bg-gray-100/50 border-transparent opacity-60 scale-[0.98]' : isActive ? (t.est_urgent ? 'bg-red-50 border-red-500 shadow-red-100' : 'bg-white border-white') : 'bg-white/40 opacity-60'}`}>
+      <div className={`flex flex-col p-4 rounded-3xl border-2 transition-all shadow-sm relative overflow-hidden ${isArchivedView ? 'bg-gray-100/50 border-transparent opacity-60 scale-[0.98]' : isActive ? (t.est_urgent ? 'bg-red-50 border-red-500' : 'bg-white border-white') : 'bg-white/40 opacity-60'}`}>
         {t.est_urgent && isActive && !isArchivedView && <div className="absolute top-0 right-0 bg-red-500 text-white text-[7px] font-black px-3 py-1 rounded-bl-xl animate-pulse flex items-center gap-1"><AlertTriangle size={8}/> URGENT</div>}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4 flex-1" onClick={() => toggleTache(t.id, t.last_done_at, isActive)}>
@@ -130,7 +152,7 @@ const Accueil = ({ onNavigate }) => {
               <span className={`text-[15px] font-black leading-tight ${estFaitAujourdhui ? 'line-through text-gray-400' : 'text-[#1B2A49]'}`}>{t.texte}</span>
               {!isArchivedView && (
                 <div className="flex items-center gap-2 mt-1">
-                    <span className="text-[9px] font-black uppercase text-[#8DC63F]">{!t.jour_semaine ? "Aujourd'hui" : t.jour_semaine === 'permanent' ? "Rétablissement" : t.jour_semaine === 'execution' ? "Ponctuel" : t.jour_semaine}</span>
+                    <span className="text-[9px] font-black uppercase text-[#8DC63F]">{getDayLabel(t.jour_semaine)}</span>
                     <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${t.attribution === 'Palefreniers' ? 'bg-blue-100 text-blue-700' : t.attribution === 'Monitrices' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'}`}>{t.attribution || 'Tous'}</span>
                 </div>
               )}
@@ -155,22 +177,14 @@ const Accueil = ({ onNavigate }) => {
       </header>
 
       <main className="w-full max-w-md mx-auto px-6 pt-64">
-        {showAlert && (
-          <div className="mb-6 bg-[#8DC63F] p-4 rounded-[25px] flex items-center justify-between shadow-lg">
-            <div className="flex items-center gap-3"><BellRing size={20} className="text-[#1B2A49]" /><span className="text-[11px] font-black uppercase text-[#1B2A49]">Nouveau : <span className="underline">{alertType}</span> ajouté !</span></div>
-            <button onClick={closeAlert} className="bg-[#1B2A49] text-white p-1.5 rounded-full"><X size={14} /></button>
-          </div>
-        )}
-
         <div className="grid grid-cols-4 gap-2 mb-10">
-          <button onClick={() => onNavigate('urgences')} className="bg-white p-3 rounded-[24px] flex flex-col items-center gap-2 shadow-sm"><div className="bg-red-500 p-2 rounded-xl text-white"><Phone size={16} /></div><span className="text-[7px] font-black uppercase text-[#1B2A49]">Urgences</span></button>
+          <button onClick={() => onNavigate('urgences')} className="bg-white p-3 rounded-[24px] flex flex-col items-center gap-2 shadow-sm"><div className="bg-red-500 p-2 rounded-xl text-white"><Phone size={16} /></div><span className="text-[7px] font-black uppercase">Urgences</span></button>
           <button onClick={() => handleNavigateWithNotif('soins')} className="bg-white p-3 rounded-[24px] flex flex-col items-center gap-2 relative shadow-sm"><div className="bg-red-100 p-2 rounded-xl text-red-600"><Pill size={16} /></div><span className="text-[7px] font-black uppercase text-[#1B2A49]">Soins</span>{notifSoins && <Badge />}</button>
-          <button onClick={() => onNavigate('planning-sorties')} className="bg-white p-3 rounded-[24px] flex flex-col items-center gap-2 shadow-sm"><div className="bg-[#8DC63F]/20 p-2 rounded-xl text-[#1B2A49]"><DoorOpen size={16} /></div><span className="text-[7px] font-black uppercase text-[#1B2A49] text-center">Sorties Proprios</span></button>
-          <button onClick={() => onNavigate('documents')} className="bg-white p-3 rounded-[24px] flex flex-col items-center gap-2 shadow-sm"><div className="bg-[#1B2A49] p-2 rounded-xl text-white"><FileText size={16} /></div><span className="text-[7px] font-black uppercase text-[#1B2A49]">Docs</span></button>
+          <button onClick={() => onNavigate('planning-sorties')} className="bg-white p-3 rounded-[24px] flex flex-col items-center gap-2 shadow-sm"><div className="bg-[#8DC63F]/20 p-2 rounded-xl text-[#1B2A49]"><DoorOpen size={16} /></div><span className="text-[7px] font-black uppercase text-center">Sorties Proprios</span></button>
+          <button onClick={() => onNavigate('documents')} className="bg-white p-3 rounded-[24px] flex flex-col items-center gap-2 shadow-sm"><div className="bg-[#1B2A49] p-2 rounded-xl text-white"><FileText size={16} /></div><span className="text-[7px] font-black uppercase">Docs</span></button>
         </div>
 
         <div className="space-y-10">
-          {/* BANDEAU VICTOIRE PRÉCIS SUR LES PROPRIÉTAIRES */}
           <div onClick={() => onNavigate('planning-sorties')} className={`p-5 rounded-[35px] flex items-center justify-between shadow-sm cursor-pointer transition-all duration-500 border-2 ${sortiesDone ? 'bg-[#8DC63F] border-[#8DC63F] scale-[1.02]' : 'bg-white border-[#8DC63F]'}`}>
             <div className="flex items-center gap-4">
               <div className={`p-2.5 rounded-2xl ${sortiesDone ? 'bg-white text-[#1B2A49]' : 'bg-[#8DC63F]/10 text-[#1B2A49]'}`}>
@@ -234,7 +248,6 @@ const Accueil = ({ onNavigate }) => {
         </div>
       </main>
 
-      {/* Navigation Footer */}
       <footer className="fixed bottom-0 left-0 right-0 p-8 z-40 pointer-events-none text-center">
         <div className="max-w-xs mx-auto flex items-center justify-around bg-[#1B2A49] p-4 rounded-[32px] shadow-2xl border border-white/10 pointer-events-auto">
           <button onClick={() => onNavigate('accueil')} className="flex flex-col items-center text-[#8DC63F] flex-1"><DoorOpen size={20} /><span className="text-[7px] font-black uppercase mt-1">Tableau</span></button>
@@ -245,7 +258,6 @@ const Accueil = ({ onNavigate }) => {
         </div>
       </footer>
 
-      {/* Modal d'ajout de tâche */}
       {isAdminOpen && (
         <div className="fixed inset-0 bg-[#1B2A49]/95 z-[100] flex items-end justify-center px-4 backdrop-blur-md">
           <div className="bg-white w-full max-w-md rounded-t-[40px] p-8 pb-10 shadow-2xl text-left overflow-y-auto max-h-[95vh]">
@@ -261,6 +273,7 @@ const Accueil = ({ onNavigate }) => {
               <div className="grid grid-cols-2 gap-2">{['Sortie', 'Arret', 'Soins', 'Autres'].map(s => <button key={s} onClick={() => setSelectedSection(s)} className={`py-3 rounded-xl text-[9px] font-black uppercase ${selectedSection === s ? 'bg-[#1B2A49] text-white' : 'bg-gray-50 text-gray-400'}`}>{s}</button>)}</div>
               <select value={selectedDay} onChange={(e) => setSelectedDay(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold">
                 <option value="">Aujourd'hui seulement</option>
+                <option value="semaine">Du lundi au vendredi</option>
                 <option value="execution">Ponctuel (jusqu'à exécution)</option>
                 <option value="permanent">Jusqu'à rétablissement</option>
                 {joursSemaine.map(j => <option key={j} value={j}>{j}</option>)}
