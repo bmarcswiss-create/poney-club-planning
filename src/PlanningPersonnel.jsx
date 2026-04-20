@@ -244,7 +244,7 @@ const PlanningPersonnel = ({ onNavigate }) => {
     });
   }, [congesParDate, manualPresence, membresBase, todayStr, notes, evenementsPerso, isLoaded, filtreEmploye]);
 
-  // LOGIQUE POUR LES BADGES DE RÔLES ET ALERTE ROUGE (MODIFIÉE À < 3)
+  // LOGIQUE POUR LES BADGES DE RÔLES AVEC CORRECTION MOBILE
   const renderRoleBadges = (dateStr) => {
     const pres = getDayPresence(dateStr);
     const allPresents = [...pres.scheduled, ...pres.ponctuel];
@@ -257,23 +257,24 @@ const PlanningPersonnel = ({ onNavigate }) => {
     const rolesOrder = ["Palefrenier", "Apprentie", "Monitrice", "Aide WE", "Aide ponctuel"];
 
     return (
-      <div className="flex flex-wrap justify-center gap-2 mt-2">
+      <div className="flex flex-wrap justify-center gap-1.5 mt-2 max-w-[280px] md:max-w-none">
         {rolesOrder.map(role => {
           const count = rolesCounts[role];
           if (!count) return null;
 
-          // SEUIL MODIFIÉ ICI À 3
           const isCriticalPalefrenier = role === "Palefrenier" && count < 3;
+          // On raccourcit le nom pour le badge
+          const displayRole = role === "Aide ponctuel" ? "Aide" : role;
 
           return (
-            <div key={role} className={`flex items-center gap-1.5 px-3 py-1 rounded-full border-2 transition-all duration-500 ${
+            <div key={role} className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full border-2 transition-all duration-500 shrink-0 ${
               isCriticalPalefrenier 
-                ? 'bg-red-600 border-red-600 text-white animate-pulse shadow-[0_0_15px_rgba(220,38,38,0.5)]' 
-                : 'bg-gray-100 border-gray-200 text-[#1B2A49]'
+                ? 'bg-red-600 border-red-600 text-white animate-pulse shadow-sm' 
+                : 'bg-gray-50 border-gray-100 text-[#1B2A49]'
             }`}>
-              {isCriticalPalefrenier ? <AlertCircle size={10} className="animate-bounce" /> : <div className="w-1.5 h-1.5 rounded-full bg-[#8DC63F]"></div>}
-              <span className="text-[9px] font-black uppercase tracking-tight">
-                {count} {role}{count > 1 && role !== 'Aide ponctuel' ? 's' : ''}
+              {isCriticalPalefrenier ? <AlertCircle size={8} /> : <div className="w-1 h-1 rounded-full bg-[#8DC63F]"></div>}
+              <span className="text-[8px] font-black uppercase tracking-tighter">
+                {count} {displayRole}{count > 1 && displayRole !== 'Aide' ? 's' : ''}
               </span>
             </div>
           );
@@ -352,14 +353,14 @@ const PlanningPersonnel = ({ onNavigate }) => {
               ${(getDayPresence(selectedDate).total < 4 && !filtreEmploye) ? 'bg-red-600 text-white border-red-600 animate-pulse' : (selectedDate === todayStr ? 'bg-white border-orange-500 ring-8 ring-orange-50' : 'bg-white border-white')}`}>
               <h3 className="text-2xl font-black uppercase text-center mb-4 leading-tight tracking-tighter text-[#1B2A49]">{new Date(selectedDate).toLocaleDateString('fr-CH', {weekday:'long', day:'numeric', month:'long', year:'numeric'})}</h3>
               <div className="flex flex-col items-center w-full">
-                  <div className="flex items-center gap-8 bg-[#1B2A49] px-10 py-6 rounded-full text-white shadow-2xl relative">
-                    <div className="flex flex-col items-center pr-8 border-r border-white/10 min-w-[100px]">
-                        <span className="text-[#8DC63F] font-black text-4xl">{getDayPresence(selectedDate).total}</span>
-                        <span className="text-[8px] font-black uppercase opacity-40 whitespace-nowrap">Présents</span>
+                  <div className="flex items-center gap-6 md:gap-8 bg-[#1B2A49] px-6 md:px-10 py-5 md:py-6 rounded-full text-white shadow-2xl relative">
+                    <div className="flex flex-col items-center pr-5 md:pr-8 border-r border-white/10 min-w-[70px] md:min-w-[100px]">
+                        <span className="text-[#8DC63F] font-black text-3xl md:text-4xl">{getDayPresence(selectedDate).total}</span>
+                        <span className="text-[7px] md:text-[8px] font-black uppercase opacity-40 whitespace-nowrap">Présents</span>
                     </div>
-                    <div className="flex-1 text-[11px] font-bold leading-tight flex flex-col justify-center text-left min-w-[200px]">
-                        <div className="opacity-40 uppercase tracking-widest text-[9px] mb-2 text-white">Équipe du jour :</div>
-                        <div className="flex flex-wrap gap-x-2 text-white">
+                    <div className="flex-1 text-[10px] md:text-[11px] font-bold leading-tight flex flex-col justify-center text-left min-w-[140px] md:min-w-[200px]">
+                        <div className="opacity-40 uppercase tracking-widest text-[8px] md:text-[9px] mb-1.5 md:mb-2 text-white">Équipe du jour :</div>
+                        <div className="flex flex-wrap gap-x-1.5 md:gap-x-2 text-white">
                             {getDayPresence(selectedDate).scheduled.map((p, i) => <span key={p.id}>{p.nom}{i < getDayPresence(selectedDate).scheduled.length - 1 || getDayPresence(selectedDate).ponctuel.length > 0 ? ',' : ''} </span>)}
                             {getDayPresence(selectedDate).ponctuel.map((p, i) => <span key={p.id} className="text-cyan-300 italic font-black"> (+ {p.nom}){i < getDayPresence(selectedDate).ponctuel.length - 1 ? ',' : ''}</span>)}
                         </div>
