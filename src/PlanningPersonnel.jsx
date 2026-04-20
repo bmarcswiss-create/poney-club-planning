@@ -244,16 +244,11 @@ const PlanningPersonnel = ({ onNavigate }) => {
     });
   }, [congesParDate, manualPresence, membresBase, todayStr, notes, evenementsPerso, isLoaded, filtreEmploye]);
 
-  // LOGIQUE POUR LES BADGES DE RÔLES AVEC CORRECTION MOBILE
   const renderRoleBadges = (dateStr) => {
     const pres = getDayPresence(dateStr);
     const allPresents = [...pres.scheduled, ...pres.ponctuel];
     const rolesCounts = {};
-    
-    allPresents.forEach(p => {
-      rolesCounts[p.role] = (rolesCounts[p.role] || 0) + 1;
-    });
-
+    allPresents.forEach(p => { rolesCounts[p.role] = (rolesCounts[p.role] || 0) + 1; });
     const rolesOrder = ["Palefrenier", "Apprentie", "Monitrice", "Aide WE", "Aide ponctuel"];
 
     return (
@@ -261,16 +256,11 @@ const PlanningPersonnel = ({ onNavigate }) => {
         {rolesOrder.map(role => {
           const count = rolesCounts[role];
           if (!count) return null;
-
           const isCriticalPalefrenier = role === "Palefrenier" && count < 3;
-          // On raccourcit le nom pour le badge
           const displayRole = role === "Aide ponctuel" ? "Aide" : role;
-
           return (
             <div key={role} className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full border-2 transition-all duration-500 shrink-0 ${
-              isCriticalPalefrenier 
-                ? 'bg-red-600 border-red-600 text-white animate-pulse shadow-sm' 
-                : 'bg-gray-50 border-gray-100 text-[#1B2A49]'
+              isCriticalPalefrenier ? 'bg-red-600 border-red-600 text-white animate-pulse shadow-sm' : 'bg-gray-50 border-gray-100 text-[#1B2A49]'
             }`}>
               {isCriticalPalefrenier ? <AlertCircle size={8} /> : <div className="w-1 h-1 rounded-full bg-[#8DC63F]"></div>}
               <span className="text-[8px] font-black uppercase tracking-tighter">
@@ -321,11 +311,7 @@ const PlanningPersonnel = ({ onNavigate }) => {
                         <div key={m.id} onClick={() => { setFiltreEmploye(filtreEmploye === m.id ? null : m.id); setIsSidebarOpen(false); }} className={`p-3 rounded-xl mb-2 cursor-pointer transition-all ${filtreEmploye === m.id ? 'bg-[#8DC63F] text-[#1B2A49]' : 'bg-[#213459]'}`}>
                           <div className="flex justify-between items-start mb-1">
                             <span className="block">{m.nom}</span>
-                            {m.role === "Palefrenier" && (
-                              <span className={`text-[9px] px-1.5 py-0.5 rounded font-black ${stats.solde < 5 ? 'bg-red-500 text-white' : 'bg-white/20'}`}>
-                                {stats.solde}j
-                              </span>
-                            )}
+                            {m.role === "Palefrenier" && (<span className={`text-[9px] px-1.5 py-0.5 rounded font-black ${stats.solde < 5 ? 'bg-red-500 text-white' : 'bg-white/20'}`}>{stats.solde}j</span>)}
                           </div>
                           {m.role !== "Aide ponctuel" && (<div className="flex gap-1 font-mono text-[9px] uppercase">{JOURS_SEMAINE.map((j, i) => <span key={i} className={m.planning?.[j] === 'repos' ? "text-red-400" : "text-green-400"}>{j[0]}</span>)}</div>)}
                         </div>
@@ -335,7 +321,23 @@ const PlanningPersonnel = ({ onNavigate }) => {
                 );
               })}
            </div>
+
+           {/* LÉGENDE DANS LA SIDEBAR */}
+           <div className="pt-6 border-t border-white/10 pb-4">
+              <h4 className="text-[9px] font-black uppercase opacity-40 tracking-widest mb-4">Légende</h4>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-[#1B2A49] border border-white/20"></div><span className="text-[10px] font-bold">Vacances</span></div>
+                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-[#0891b2]"></div><span className="text-[10px] font-bold">Déplacement</span></div>
+                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-[#4338ca]"></div><span className="text-[10px] font-bold">Formation</span></div>
+                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-[#e2e8f0]"></div><span className="text-[10px] font-bold">Repos (individuel)</span></div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded relative overflow-hidden bg-[#1B2A49]"><div className="absolute inset-0" style={{ background: `repeating-linear-gradient(45deg, #15803d, #15803d 2px, transparent 2px, transparent 4px)` }}></div></div>
+                  <span className="text-[10px] font-bold">Provisoire</span>
+                </div>
+              </div>
+           </div>
         </div>
+
         <div className="p-4 border-t border-white/10 space-y-2 text-[#1B2A49]">{isAdmin && (<><button onClick={() => setModalStaffOpen(true)} className="w-full py-3 bg-white/5 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-white/10 transition-colors text-white"><UserCog size={16}/> Équipe</button><button onClick={() => setModalExportPinOpen(true)} className="w-full py-3 bg-cyan-600/30 text-cyan-400 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-cyan-600/50 transition-colors border border-cyan-500/30"><Download size={16}/> Export</button></>)}</div>
       </aside>
 
@@ -344,31 +346,15 @@ const PlanningPersonnel = ({ onNavigate }) => {
 
         <div className="max-w-7xl mx-auto w-full space-y-12">
           <header className="flex flex-col items-center">
-            {filtreEmploye && (
-              <div className="mb-4 flex items-center gap-2 bg-[#8DC63F] text-[#1B2A49] px-4 py-2 rounded-full font-black uppercase text-[10px] shadow-lg animate-bounce">
-                <Star size={14} className="fill-current"/> Congés de {membresBase.find(m => m.id === filtreEmploye)?.nom}
-              </div>
-            )}
-            <div className={`w-full max-w-3xl rounded-[3rem] border-4 flex flex-col justify-center items-center p-8 transition-all shadow-xl 
-              ${(getDayPresence(selectedDate).total < 4 && !filtreEmploye) ? 'bg-red-600 text-white border-red-600 animate-pulse' : (selectedDate === todayStr ? 'bg-white border-orange-500 ring-8 ring-orange-50' : 'bg-white border-white')}`}>
+            {filtreEmploye && (<div className="mb-4 flex items-center gap-2 bg-[#8DC63F] text-[#1B2A49] px-4 py-2 rounded-full font-black uppercase text-[10px] shadow-lg animate-bounce"><Star size={14} className="fill-current"/> Congés de {membresBase.find(m => m.id === filtreEmploye)?.nom}</div>)}
+            <div className={`w-full max-w-3xl rounded-[3rem] border-4 flex flex-col justify-center items-center p-8 transition-all shadow-xl ${(getDayPresence(selectedDate).total < 4 && !filtreEmploye) ? 'bg-red-600 text-white border-red-600 animate-pulse' : (selectedDate === todayStr ? 'bg-white border-orange-500 ring-8 ring-orange-50' : 'bg-white border-white')}`}>
               <h3 className="text-2xl font-black uppercase text-center mb-4 leading-tight tracking-tighter text-[#1B2A49]">{new Date(selectedDate).toLocaleDateString('fr-CH', {weekday:'long', day:'numeric', month:'long', year:'numeric'})}</h3>
               <div className="flex flex-col items-center w-full">
                   <div className="flex items-center gap-6 md:gap-8 bg-[#1B2A49] px-6 md:px-10 py-5 md:py-6 rounded-full text-white shadow-2xl relative">
-                    <div className="flex flex-col items-center pr-5 md:pr-8 border-r border-white/10 min-w-[70px] md:min-w-[100px]">
-                        <span className="text-[#8DC63F] font-black text-3xl md:text-4xl">{getDayPresence(selectedDate).total}</span>
-                        <span className="text-[7px] md:text-[8px] font-black uppercase opacity-40 whitespace-nowrap">Présents</span>
-                    </div>
-                    <div className="flex-1 text-[10px] md:text-[11px] font-bold leading-tight flex flex-col justify-center text-left min-w-[140px] md:min-w-[200px]">
-                        <div className="opacity-40 uppercase tracking-widest text-[8px] md:text-[9px] mb-1.5 md:mb-2 text-white">Équipe du jour :</div>
-                        <div className="flex flex-wrap gap-x-1.5 md:gap-x-2 text-white">
-                            {getDayPresence(selectedDate).scheduled.map((p, i) => <span key={p.id}>{p.nom}{i < getDayPresence(selectedDate).scheduled.length - 1 || getDayPresence(selectedDate).ponctuel.length > 0 ? ',' : ''} </span>)}
-                            {getDayPresence(selectedDate).ponctuel.map((p, i) => <span key={p.id} className="text-cyan-300 italic font-black"> (+ {p.nom}){i < getDayPresence(selectedDate).ponctuel.length - 1 ? ',' : ''}</span>)}
-                        </div>
-                    </div>
+                    <div className="flex flex-col items-center pr-5 md:pr-8 border-r border-white/10 min-w-[70px] md:min-w-[100px]"><span className="text-[#8DC63F] font-black text-3xl md:text-4xl">{getDayPresence(selectedDate).total}</span><span className="text-[7px] md:text-[8px] font-black uppercase opacity-40">Présents</span></div>
+                    <div className="flex-1 text-[10px] md:text-[11px] font-bold leading-tight flex flex-col justify-center text-left min-w-[140px] md:min-w-[200px]"><div className="opacity-40 uppercase tracking-widest text-[8px] md:text-[9px] mb-1.5 md:mb-2 text-white">Équipe du jour :</div><div className="flex flex-wrap gap-x-1.5 md:gap-x-2 text-white">{getDayPresence(selectedDate).scheduled.map((p, i) => <span key={p.id}>{p.nom}{i < getDayPresence(selectedDate).scheduled.length - 1 || getDayPresence(selectedDate).ponctuel.length > 0 ? ',' : ''} </span>)}{getDayPresence(selectedDate).ponctuel.map((p, i) => <span key={p.id} className="text-cyan-300 italic font-black"> (+ {p.nom}){i < getDayPresence(selectedDate).ponctuel.length - 1 ? ',' : ''}</span>)}</div></div>
                   </div>
-                  
                   {!filtreEmploye && renderRoleBadges(selectedDate)}
-
                   <div className="mt-14 w-full grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
                      <div className="space-y-3">
                         {getDayPresence(selectedDate).malades.length > 0 && (<div className="bg-orange-50 p-3 rounded-2xl border border-orange-100"><span className="text-[9px] font-black uppercase text-orange-400 block mb-1">🤒 Maladie</span><div className="flex flex-wrap gap-2 text-[10px] font-bold text-orange-700">{getDayPresence(selectedDate).malades.map((m, i) => <span key={i}>{m.nom} {getCompactPeriod(m.periode)}</span>)}</div></div>)}
@@ -385,7 +371,7 @@ const PlanningPersonnel = ({ onNavigate }) => {
         </div>
       </main>
 
-      {/* MODALS */}
+      {/* MODALS (Reste du code identique) */}
       {modalPinOpen && (<div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[1000] p-4 text-center text-[#1B2A49]"><div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl border-b-[12px] border-black text-[#1B2A49]"><Lock className="mx-auto mb-4 text-[#1B2A49]" size={40} /><form onSubmit={(e) => { e.preventDefault(); if (pinInput.toLowerCase() === PIN_ADMIN) { setIsAdmin(true); setModalPinOpen(false); setPinInput(""); } else { alert("Code incorrect"); } }} className="space-y-4 text-center text-[#1B2A49]"><input autoFocus type="password" placeholder="PIN" className="w-full text-center text-3xl border-b-4 border-black p-3 outline-none font-black text-[#1B2A49]" value={pinInput} onChange={e => setPinInput(e.target.value)} /><button type="submit" className="w-full py-4 bg-black text-white rounded-xl font-bold uppercase text-xs">Déverrouiller</button></form><button onClick={() => setModalPinOpen(false)} className="mt-4 text-gray-400 text-xs">Annuler</button></div></div>)}
       {modalChoiceOpen && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[500] p-4 text-[#1B2A49]">
@@ -399,7 +385,7 @@ const PlanningPersonnel = ({ onNavigate }) => {
         </div>
       )}
       {modalEvtOpen && (<div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[601] p-4 text-[#1B2A49]"><div className="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl relative text-center text-[#1B2A49]"><X className="absolute top-6 right-6 cursor-pointer text-gray-400" onClick={() => setModalEvtOpen(false)} size={20}/><h3 className="font-black uppercase mb-8 text-base tracking-tighter text-[#1B2A49]">Événement</h3><form onSubmit={async (e) => { e.preventDefault(); const nx = { ...evenementsPerso }; const date = evtForm.dateDebut; nx[date] = [...(nx[date] || []), { id: Date.now(), titre: evtForm.titre, type: evtForm.type }]; setEvenementsPerso(nx); setModalEvtOpen(false); await syncAll(membresBase, conges, notes, nx, manualPresence); }} className="space-y-4 text-left text-[#1B2A49]"><input type="date" className="w-full border-2 p-4 rounded-xl font-bold text-[#1B2A49]" value={evtForm.dateDebut} onChange={e => setEvtForm({...evtForm, dateDebut: e.target.value})}/><input type="text" className="w-full border-2 p-4 rounded-xl font-black text-[#1B2A49]" placeholder="Titre" value={evtForm.titre} onChange={e => setEvtForm({...evtForm, titre: e.target.value})} required/><button type="submit" className="w-full bg-[#1B2A49] text-white py-4 rounded-xl font-black uppercase text-xs shadow-md">Ajouter</button></form></div></div>)}
-      {modalNoteOpen && (<div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[601] p-4 text-[#1B2A49]"><div className="bg-white rounded-[2rem] w-full max-w-sm overflow-hidden border-4 border-yellow-400 shadow-2xl text-center text-[#1B2A49]"><div className="p-4 bg-yellow-400 font-black flex justify-between uppercase text-[10px] text-[#1B2A49]">Note<X onClick={() => setModalNoteOpen(false)} size={18}/></div><form onSubmit={async (e) => { e.preventDefault(); const nx = { ...notes }; if (!noteText.trim()) delete nx[selectedDate]; else nx[selectedDate] = noteText; setNotes(nx); setModalNoteOpen(false); await syncAll(membresBase, conges, nx, evenementsPerso, manualPresence); }} className="p-6 space-y-4 text-center text-[#1B2A49]"><textarea autoFocus className="w-full border-2 p-5 rounded-2xl bg-yellow-50 outline-none h-40 font-bold text-[#1B2A49]" value={noteText} onChange={e => setNoteText(e.target.value)}/><button type="submit" className="w-full bg-yellow-400 text-[#1B2A49] font-black py-4 rounded-xl uppercase text-xs shadow-md">Enregistrer</button></form></div></div>)}
+      {modalNoteOpen && (<div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[601] p-4 text-[#1B2A49]"><div className="bg-white rounded-[2rem] w-full max-sm overflow-hidden border-4 border-yellow-400 shadow-2xl text-center text-[#1B2A49]"><div className="p-4 bg-yellow-400 font-black flex justify-between uppercase text-[10px] text-[#1B2A49]">Note<X onClick={() => setModalNoteOpen(false)} size={18}/></div><form onSubmit={async (e) => { e.preventDefault(); const nx = { ...notes }; if (!noteText.trim()) delete nx[selectedDate]; else nx[selectedDate] = noteText; setNotes(nx); setModalNoteOpen(false); await syncAll(membresBase, conges, nx, evenementsPerso, manualPresence); }} className="p-6 space-y-4 text-center text-[#1B2A49]"><textarea autoFocus className="w-full border-2 p-5 rounded-2xl bg-yellow-50 outline-none h-40 font-bold text-[#1B2A49]" value={noteText} onChange={e => setNoteText(e.target.value)}/><button type="submit" className="w-full bg-yellow-400 text-[#1B2A49] font-black py-4 rounded-xl uppercase text-xs shadow-md">Enregistrer</button></form></div></div>)}
       {modalCongeOpen && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[600] p-4 text-[#1B2A49]">
           <div className="bg-white rounded-[2.5rem] w-full max-w-md overflow-hidden shadow-2xl border-2 border-[#1B2A49]">
@@ -409,7 +395,7 @@ const PlanningPersonnel = ({ onNavigate }) => {
               <select className="w-full border-4 border-gray-50 p-5 rounded-2xl font-black text-[#1B2A49]" value={formData.periode} onChange={e => setFormData({...formData, periode: e.target.value})}><option value="jour">☀️ Journée entière</option><option value="matin">🌅 Matin (0.5)</option><option value="apres-midi">🌇 Après-midi (0.5)</option></select>
               <div className="grid grid-cols-2 gap-4 text-[#1B2A49]"><input type="date" className="border-4 border-gray-50 p-5 rounded-2xl font-bold text-[#1B2A49]" value={formData.dateDebut} onChange={e => setFormData({...formData, dateDebut: e.target.value})} required/><input type="date" className="border-4 border-gray-50 p-5 rounded-2xl font-bold text-[#1B2A49]" value={formData.dateFin} onChange={e => setFormData({...formData, dateFin: e.target.value})}/></div>
               <select className="w-full border-4 border-gray-50 p-5 rounded-2xl font-black text-[#1B2A49]" value={formData.userId} onChange={e => setFormData({...formData, userId: e.target.value})} required><option value="">-- Employé --</option>{membresBase.map(m => <option key={m.id} value={m.id}>{m.nom}</option>)}</select>
-              <button type="submit" className="w-full bg-[#1B2A49] text-white py-5 rounded-2xl font-black uppercase">Enregistrer</button>
+              <button type="submit" className="w-full bg-[#1B2A49] text-white py-5 rounded-2xl font-black uppercase shadow-lg">Enregistrer</button>
             </form>
           </div>
         </div>
