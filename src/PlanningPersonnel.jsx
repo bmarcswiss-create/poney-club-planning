@@ -143,9 +143,26 @@ const PlanningPersonnel = ({ onNavigate }) => {
     return { total: scheduled.length + ponctuel.length, scheduled, ponctuel, malades, absentsPlanifies };
   };
 
+  // LOGIQUE DE CALCUL DES SOLDES AMÉLIORÉE
   const getEmployeeStats = (employeeId, quota) => {
+    const employee = membresBase.find(m => String(m.id) === String(employeeId));
     const empConges = (conges || []).filter(c => String(c.userId) === String(employeeId));
-    const pris = empConges.filter(c => c.category === 'conge').reduce((acc, curr) => acc + (curr.periode === 'jour' ? 1 : 0.5), 0);
+    
+    const pris = empConges.filter(c => c.category === 'conge').reduce((acc, curr) => {
+      // 1. Déterminer le jour de la semaine pour cette date
+      const dateAbs = new Date(curr.date);
+      const nomJour = JOURS_SEMAINE[dateAbs.getDay() === 0 ? 6 : dateAbs.getDay() - 1];
+      
+      // 2. Vérifier si l'employé est en repos dans son planning hebdo
+      const estReposPlanning = employee?.planning?.[nomJour] === 'repos';
+      
+      // 3. Si c'est un jour de repos, on ne décompte rien (0)
+      if (estReposPlanning) return acc + 0;
+      
+      // 4. Sinon, décompte normal
+      return acc + (curr.periode === 'jour' ? 1 : 0.5);
+    }, 0);
+
     const solde = (quota || 25) - pris;
     return { pris, solde, empConges };
   };
@@ -188,7 +205,7 @@ const PlanningPersonnel = ({ onNavigate }) => {
       return (
         <div key={mois} className="bg-white rounded-[2.5rem] shadow-sm border border-white overflow-hidden flex flex-col h-fit transition-all hover:shadow-md">
           <div className="bg-gray-50/50 py-4 text-center font-black text-[#1B2A49] text-[10px] uppercase tracking-[0.2em] border-b border-gray-100">{mois}</div>
-          <div className="p-4 grid grid-cols-7 gap-2 flex-1 w-full box-border">
+          <div className="p-4 grid grid-cols-7 gap-2 flex-1 w-full box-border text-[#1B2A49]">
             {['L','M','M','J','V','S','D'].map(day => <div key={day} className="text-center text-[10px] font-bold text-gray-300 pb-1">{day}</div>)}
             {jours.map((dateObj, idx) => {
               if (!dateObj) return <div key={idx} className="aspect-square"></div>;
@@ -196,26 +213,36 @@ const PlanningPersonnel = ({ onNavigate }) => {
               const pres = getDayPresence(dStr);
               const isToday = dStr === todayStr;
               const allAbsCase = congesParDate[dStr] || [];
-              const absVis = allAbsCase.filter(a => a.category !== 'maladie');
-              const isAlerte = pres.total < 4;
+
+              let visAbs = allAbsCase.filter(a => a.category !== 'maladie');
+              if (filtreEmploye) {
+                const empAbs = allAbsCase.find(a => String(a.userId) === String(filtreEmploye));
+                const nomJour = JOURS_SEMAINE[dateObj.getDay() === 0 ? 6 : dateObj.getDay() - 1];
+                const estRepos = membresBase.find(m => m.id === filtreEmploye)?.planning?.[nomJour] === 'repos';
+                if (empAbs) visAbs = [empAbs];
+                else if (estRepos) visAbs = [{ category: 'repos_perso', periode: 'jour', statut: 'valide' }];
+                else visAbs = [];
+              }
+
+              const isAlerte = pres.total < 4 && !filtreEmploye;
               return (
                 <div key={dStr} onClick={() => { setSelectedDate(dStr); setModalChoiceOpen(dStr); }}
                   className={`aspect-square min-h-[35px] rounded-xl flex items-center justify-center relative cursor-pointer overflow-hidden transition-all
                   ${isAlerte ? 'bg-red-600 border border-transparent' : isToday ? 'bg-amber-50 border-4 border-orange-600 z-10' : 'bg-[#F4F6F9] border border-transparent'}`}>
-                  {absVis.length > 0 && !isAlerte && (
+                  {visAbs.length > 0 && !isAlerte && (
                     <div className="absolute inset-0 flex flex-col">
                       {[0, 1].map(h => {
-                        const m = absVis.find(a => (h === 0 ? ['matin','jour'].includes(a.periode) : ['apres-midi','jour'].includes(a.periode)));
+                        const m = visAbs.find(a => (h === 0 ? ['matin','jour'].includes(a.periode) : ['apres-midi','jour'].includes(a.periode)));
                         if (!m) return <div key={h} className="h-1/2"></div>;
                         const isProv = m.statut === 'provisoire' && (m.category === 'conge' || m.category === 'formation');
-                        let col = '#1B2A49'; if (m.category === 'deplacement') col = '#0891b2'; if (m.category === 'formation') col = '#4338ca'; 
+                        let col = '#1B2A49'; if (m.category === 'deplacement') col = '#0891b2'; if (m.category === 'formation') col = '#4338ca'; if (m.category === 'repos_perso') col = '#e2e8f0';
                         return ( <div key={h} className="h-1/2 w-full relative" style={{ backgroundColor: isProv ? 'transparent' : col }}>{isProv && <div className="absolute inset-0" style={{ background: `repeating-linear-gradient(45deg, #15803d, #15803d 2.5px, ${col} 2.5px, ${col} 5px)` }}></div>}</div> );
                       })}
                     </div>
                   )}
                   { (OFFICIAL_EVENTS_2026[dStr] || evenementsPerso[dStr]) && ( <div className="absolute bottom-0 w-full h-[2px] bg-purple-600"></div> )}
                   {notes[dStr] && <div className="absolute top-0 right-0 w-2 h-2 bg-yellow-400 rounded-bl-full shadow-sm"></div>}
-                  <span className={`z-10 font-bold text-xs ${ (isAlerte || (absVis.length > 0 && !isAlerte)) ? 'text-white' : 'text-[#1B2A49]'}`}>{dateObj.getDate()}</span>
+                  <span className={`z-10 font-bold text-xs ${ (isAlerte || (visAbs.length > 0 && visAbs[0].category !== 'repos_perso' && !isAlerte)) ? 'text-white' : 'text-[#1B2A49]'}`}>{dateObj.getDate()}</span>
                 </div>
               );
             })}
@@ -223,7 +250,7 @@ const PlanningPersonnel = ({ onNavigate }) => {
         </div>
       );
     });
-  }, [congesParDate, manualPresence, membresBase, todayStr, notes, evenementsPerso, isLoaded]);
+  }, [congesParDate, manualPresence, membresBase, todayStr, notes, evenementsPerso, isLoaded, filtreEmploye]);
 
   const getCompactPeriod = (p) => (p === 'matin' ? '(M)' : p === 'apres-midi' ? '(AM)' : '');
 
@@ -243,7 +270,7 @@ const PlanningPersonnel = ({ onNavigate }) => {
             <h1 className="text-xl font-black uppercase leading-tight tracking-tighter">Poney Club Presinge</h1>
           </div>
         </div>
-        <div className="p-4 space-y-4 overflow-y-auto flex-1 scrollbar-hide">
+        <div className="p-4 space-y-4 overflow-y-auto flex-1 scrollbar-hide text-left">
            {isAdmin && (
              <div className="space-y-2">
                 <button onClick={() => { setFormData({ ...formData, dateDebut: selectedDate, dateFin: selectedDate, category: 'conge', statut: 'provisoire', periode: 'jour' }); setModalCongeOpen(true); }} className="w-full bg-[#8DC63F] text-[#1B2A49] font-black py-4 rounded-xl flex items-center justify-center gap-2 uppercase text-xs shadow-lg"><Plus size={18}/> Absence</button>
@@ -251,7 +278,7 @@ const PlanningPersonnel = ({ onNavigate }) => {
              </div>
            )}
            <button onClick={() => setFiltreEmploye(null)} className={`w-full bg-white/10 text-white font-bold py-3 rounded-xl text-xs ${!filtreEmploye ? 'ring-2 ring-[#8DC63F]' : ''}`}>TOUTE L'ÉQUIPE</button>
-           <div className="space-y-6 pt-4 border-t border-white/5 text-left text-sm font-bold">
+           <div className="space-y-6 pt-4 border-t border-white/5 text-sm font-bold">
               {["Palefrenier", "Apprentie", "Monitrice", "Aide WE", "Aide ponctuel"].map(role => {
                 const mm = membresBase.filter(m => m.role === role); if (!mm.length) return null;
                 return (
@@ -287,14 +314,14 @@ const PlanningPersonnel = ({ onNavigate }) => {
         <div className="max-w-7xl mx-auto w-full space-y-12">
           <header className="flex flex-col items-center">
             <div className={`w-full max-w-3xl rounded-[3rem] border-4 flex flex-col justify-center items-center p-8 transition-all shadow-xl 
-              ${getDayPresence(selectedDate).total < 4 ? 'bg-red-600 text-white border-red-600 animate-pulse' : (selectedDate === todayStr ? 'bg-white border-orange-500 ring-8 ring-orange-50' : 'bg-white border-white')}`}>
+              ${(getDayPresence(selectedDate).total < 4 && !filtreEmploye) ? 'bg-red-600 text-white border-red-600 animate-pulse' : (selectedDate === todayStr ? 'bg-white border-orange-500 ring-8 ring-orange-50' : 'bg-white border-white')}`}>
               <h3 className="text-2xl font-black uppercase text-center mb-4 leading-tight tracking-tighter">{new Date(selectedDate).toLocaleDateString('fr-CH', {weekday:'long', day:'numeric', month:'long', year:'numeric'})}</h3>
               <div className="flex flex-col items-center w-full">
                   <div className="flex items-center gap-6 bg-[#1B2A49] px-8 py-4 rounded-full text-white shadow-2xl">
                     <span className="text-[#8DC63F] font-black text-4xl">{getDayPresence(selectedDate).total}</span>
                     <div className="text-[11px] font-bold leading-tight flex flex-wrap gap-x-2 border-l border-white/20 pl-6 text-left min-w-[150px]">
-                        <span className="opacity-40 uppercase tracking-widest w-full text-[9px] mb-1">Présents :</span>
-                        {getDayPresence(selectedDate).scheduled.map((p, i) => <span key={p.id}>{p.nom}{i < getDayPresence(selectedDate).scheduled.length - 1 || getDayPresence(selectedDate).ponctuel.length > 0 ? ',' : ''} </span>)}
+                        <span className="opacity-40 uppercase tracking-widest w-full text-[9px] mb-1 text-white">Présents :</span>
+                        {getDayPresence(selectedDate).scheduled.map((p, i) => <span key={p.id} className="text-white">{p.nom}{i < getDayPresence(selectedDate).scheduled.length - 1 || getDayPresence(selectedDate).ponctuel.length > 0 ? ',' : ''} </span>)}
                         {getDayPresence(selectedDate).ponctuel.map((p, i) => <span key={p.id} className="text-cyan-300 italic font-black"> (+ {p.nom}){i < getDayPresence(selectedDate).ponctuel.length - 1 ? ',' : ''}</span>)}
                     </div>
                   </div>
@@ -315,29 +342,29 @@ const PlanningPersonnel = ({ onNavigate }) => {
       </main>
 
       {/* MODALS */}
-      {modalPinOpen && (<div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[1000] p-4"><div className="bg-white rounded-3xl p-8 w-full max-w-sm text-center shadow-2xl border-b-[12px] border-black"><Lock className="mx-auto mb-4" size={40} /><form onSubmit={(e) => { e.preventDefault(); if (pinInput.toLowerCase() === PIN_ADMIN) { setIsAdmin(true); setModalPinOpen(false); setPinInput(""); } else { alert("Code incorrect"); } }} className="space-y-4"><input autoFocus type="password" placeholder="PIN" className="w-full text-center text-3xl border-b-4 border-black p-3 outline-none font-black" value={pinInput} onChange={e => setPinInput(e.target.value)} /><button type="submit" className="w-full py-4 bg-black text-white rounded-xl font-bold uppercase text-xs">Déverrouiller</button></form><button onClick={() => setModalPinOpen(false)} className="mt-4 text-gray-400 text-xs">Annuler</button></div></div>)}
+      {modalPinOpen && (<div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[1000] p-4 text-center"><div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl border-b-[12px] border-black"><Lock className="mx-auto mb-4 text-[#1B2A49]" size={40} /><form onSubmit={(e) => { e.preventDefault(); if (pinInput.toLowerCase() === PIN_ADMIN) { setIsAdmin(true); setModalPinOpen(false); setPinInput(""); } else { alert("Code incorrect"); } }} className="space-y-4 text-center text-[#1B2A49]"><input autoFocus type="password" placeholder="PIN" className="w-full text-center text-3xl border-b-4 border-black p-3 outline-none font-black text-[#1B2A49]" value={pinInput} onChange={e => setPinInput(e.target.value)} /><button type="submit" className="w-full py-4 bg-black text-white rounded-xl font-bold uppercase text-xs">Déverrouiller</button></form><button onClick={() => setModalPinOpen(false)} className="mt-4 text-gray-400 text-xs">Annuler</button></div></div>)}
       {modalChoiceOpen && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[500] p-4 text-[#1B2A49]">
           <div className="bg-white rounded-[2.5rem] w-full max-w-md p-6 space-y-6 border-t-8 border-[#8DC63F] shadow-2xl">
-            <h4 className="font-black uppercase text-base border-b pb-2 text-center">{new Date(modalChoiceOpen).toLocaleDateString('fr-CH', {weekday:'long', day:'numeric', month:'long'})}</h4>
+            <h4 className="font-black uppercase text-base border-b pb-2 text-center text-[#1B2A49]">{new Date(modalChoiceOpen).toLocaleDateString('fr-CH', {weekday:'long', day:'numeric', month:'long'})}</h4>
             <div className="grid grid-cols-2 gap-2 bg-gray-50 p-3 rounded-2xl max-h-40 overflow-y-auto">{membresBase.map(m => { const pres = getDayPresence(modalChoiceOpen); const isPresent = pres.scheduled.some(p => p.id === m.id) || pres.ponctuel.some(p => p.id === m.id); const isMalade = pres.malades.some(p => p.id === m.id); return (<label key={m.id} className={`flex items-center gap-2 p-2 hover:bg-white rounded transition-all cursor-pointer ${isMalade ? 'opacity-30' : ''}`}><input type="checkbox" disabled={isMalade} className="w-5 h-5 accent-[#8DC63F]" checked={isPresent} onChange={async () => { const dOver = manualPresence[modalChoiceOpen] || {}; const newMan = { ...manualPresence, [modalChoiceOpen]: { ...dOver, [m.id]: !isPresent } }; setManualPresence(newMan); await syncAll(membresBase, conges, notes, evenementsPerso, newMan); }} /><span className={`text-[11px] font-bold truncate ${isMalade ? 'line-through text-orange-600' : ''}`}>{m.nom}</span></label>) })}</div>
-            {isAdmin && congesParDate[modalChoiceOpen]?.length > 0 && (<div className="space-y-2 border-t pt-4"><span className="text-[9px] font-black uppercase opacity-40">Absences enregistrées :</span><div className="space-y-2">{congesParDate[modalChoiceOpen].map((abs) => { const e = membresBase.find(m => String(m.id) === String(abs.userId)); return (<div key={abs.id} className="flex justify-between items-center bg-gray-100 p-2 rounded-lg"><span className="text-[10px] font-bold">{e?.nom} ({abs.category})</span><button onClick={async () => { if(confirm("Supprimer l'absence ?")){ const nC = conges.filter(c => c.id !== abs.id); setConges(nC); await syncAll(membresBase, nC, notes, evenementsPerso, manualPresence); }}} className="text-red-500"><Trash2 size={14}/></button></div>)})}</div></div>)}
-            {isAdmin && (<div className="space-y-2 pt-2 border-t mt-2"><button onClick={() => { setFormData({ ...formData, dateDebut: modalChoiceOpen, dateFin: modalChoiceOpen, category: 'conge', statut: 'provisoire', periode: 'jour' }); setModalCongeOpen(true); setModalChoiceOpen(null); }} className="w-full py-4 bg-[#8DC63F] text-[#1B2A49] font-black rounded-2xl uppercase text-xs shadow-md">Ajouter Absence</button><div className="grid grid-cols-2 gap-2"><button onClick={() => { setModalEvtOpen(true); setModalChoiceOpen(null); }} className="bg-blue-600 text-white py-3 rounded-xl text-[10px] font-black uppercase">Event</button><button onClick={() => { setNoteText(notes[modalChoiceOpen] || ""); setModalNoteOpen(true); setModalChoiceOpen(null); }} className="bg-yellow-400 text-[#1B2A49] py-3 rounded-xl text-[10px] font-black uppercase">Post-it</button></div></div>)}
+            {isAdmin && congesParDate[modalChoiceOpen]?.length > 0 && (<div className="space-y-2 border-t pt-4 text-left"><span className="text-[9px] font-black uppercase opacity-40">Absences enregistrées :</span><div className="space-y-2">{congesParDate[modalChoiceOpen].map((abs) => { const e = membresBase.find(m => String(m.id) === String(abs.userId)); return (<div key={abs.id} className="flex justify-between items-center bg-gray-100 p-2 rounded-lg"><span className="text-[10px] font-bold">{e?.nom} ({abs.category})</span><button onClick={async () => { if(confirm("Supprimer l'absence ?")){ const nC = conges.filter(c => c.id !== abs.id); setConges(nC); await syncAll(membresBase, nC, notes, evenementsPerso, manualPresence); }}} className="text-red-500"><Trash2 size={14}/></button></div>)})}</div></div>)}
+            {isAdmin && (<div className="space-y-2 pt-2 border-t mt-2 text-center"><button onClick={() => { setFormData({ ...formData, dateDebut: modalChoiceOpen, dateFin: modalChoiceOpen, category: 'conge', statut: 'provisoire', periode: 'jour' }); setModalCongeOpen(true); setModalChoiceOpen(null); }} className="w-full py-4 bg-[#8DC63F] text-[#1B2A49] font-black rounded-2xl uppercase text-xs shadow-md">Ajouter Absence</button><div className="grid grid-cols-2 gap-2"><button onClick={() => { setModalEvtOpen(true); setModalChoiceOpen(null); }} className="bg-blue-600 text-white py-3 rounded-xl text-[10px] font-black uppercase">Event</button><button onClick={() => { setNoteText(notes[modalChoiceOpen] || ""); setModalNoteOpen(true); setModalChoiceOpen(null); }} className="bg-yellow-400 text-[#1B2A49] py-3 rounded-xl text-[10px] font-black uppercase">Post-it</button></div></div>)}
             <button onClick={() => setModalChoiceOpen(null)} className="w-full text-gray-400 font-bold text-xs uppercase py-2">Fermer</button>
           </div>
         </div>
       )}
-      {modalEvtOpen && (<div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[601] p-4 text-[#1B2A49]"><div className="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl relative text-center"><X className="absolute top-6 right-6 cursor-pointer text-gray-400" onClick={() => setModalEvtOpen(false)} size={20}/><h3 className="font-black uppercase mb-8 text-base tracking-tighter">Événement</h3><form onSubmit={async (e) => { e.preventDefault(); const nx = { ...evenementsPerso }; const date = evtForm.dateDebut; nx[date] = [...(nx[date] || []), { id: Date.now(), titre: evtForm.titre, type: evtForm.type }]; setEvenementsPerso(nx); setModalEvtOpen(false); await syncAll(membresBase, conges, notes, nx, manualPresence); }} className="space-y-4 text-left"><input type="date" className="w-full border-2 p-4 rounded-xl font-bold" value={evtForm.dateDebut} onChange={e => setEvtForm({...evtForm, dateDebut: e.target.value})}/><input type="text" className="w-full border-2 p-4 rounded-xl font-black" placeholder="Titre" value={evtForm.titre} onChange={e => setEvtForm({...evtForm, titre: e.target.value})} required/><button type="submit" className="w-full bg-[#1B2A49] text-white py-4 rounded-xl font-black uppercase text-xs shadow-md">Ajouter</button></form></div></div>)}
-      {modalNoteOpen && (<div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[601] p-4"><div className="bg-white rounded-[2rem] w-full max-w-sm overflow-hidden border-4 border-yellow-400 shadow-2xl text-center"><div className="p-4 bg-yellow-400 font-black flex justify-between uppercase text-[10px]">Note<X onClick={() => setModalNoteOpen(false)} size={18}/></div><form onSubmit={async (e) => { e.preventDefault(); const nx = { ...notes }; if (!noteText.trim()) delete nx[selectedDate]; else nx[selectedDate] = noteText; setNotes(nx); setModalNoteOpen(false); await syncAll(membresBase, conges, nx, evenementsPerso, manualPresence); }} className="p-6 space-y-4"><textarea autoFocus className="w-full border-2 p-5 rounded-2xl bg-yellow-50 outline-none h-40 font-bold" value={noteText} onChange={e => setNoteText(e.target.value)}/><button type="submit" className="w-full bg-yellow-400 text-[#1B2A49] font-black py-4 rounded-xl uppercase text-xs shadow-md">Enregistrer</button></form></div></div>)}
+      {modalEvtOpen && (<div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[601] p-4 text-[#1B2A49]"><div className="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl relative text-center"><X className="absolute top-6 right-6 cursor-pointer text-gray-400" onClick={() => setModalEvtOpen(false)} size={20}/><h3 className="font-black uppercase mb-8 text-base tracking-tighter text-[#1B2A49]">Événement</h3><form onSubmit={async (e) => { e.preventDefault(); const nx = { ...evenementsPerso }; const date = evtForm.dateDebut; nx[date] = [...(nx[date] || []), { id: Date.now(), titre: evtForm.titre, type: evtForm.type }]; setEvenementsPerso(nx); setModalEvtOpen(false); await syncAll(membresBase, conges, notes, nx, manualPresence); }} className="space-y-4 text-left text-[#1B2A49]"><input type="date" className="w-full border-2 p-4 rounded-xl font-bold text-[#1B2A49]" value={evtForm.dateDebut} onChange={e => setEvtForm({...evtForm, dateDebut: e.target.value})}/><input type="text" className="w-full border-2 p-4 rounded-xl font-black text-[#1B2A49]" placeholder="Titre" value={evtForm.titre} onChange={e => setEvtForm({...evtForm, titre: e.target.value})} required/><button type="submit" className="w-full bg-[#1B2A49] text-white py-4 rounded-xl font-black uppercase text-xs shadow-md">Ajouter</button></form></div></div>)}
+      {modalNoteOpen && (<div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[601] p-4 text-[#1B2A49]"><div className="bg-white rounded-[2rem] w-full max-sm overflow-hidden border-4 border-yellow-400 shadow-2xl text-center text-[#1B2A49]"><div className="p-4 bg-yellow-400 font-black flex justify-between uppercase text-[10px] text-[#1B2A49]">Note<X onClick={() => setModalNoteOpen(false)} size={18}/></div><form onSubmit={async (e) => { e.preventDefault(); const nx = { ...notes }; if (!noteText.trim()) delete nx[selectedDate]; else nx[selectedDate] = noteText; setNotes(nx); setModalNoteOpen(false); await syncAll(membresBase, conges, nx, evenementsPerso, manualPresence); }} className="p-6 space-y-4 text-center text-[#1B2A49]"><textarea autoFocus className="w-full border-2 p-5 rounded-2xl bg-yellow-50 outline-none h-40 font-bold text-[#1B2A49]" value={noteText} onChange={e => setNoteText(e.target.value)}/><button type="submit" className="w-full bg-yellow-400 text-[#1B2A49] font-black py-4 rounded-xl uppercase text-xs shadow-md">Enregistrer</button></form></div></div>)}
       {modalCongeOpen && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[600] p-4 text-[#1B2A49]">
           <div className="bg-white rounded-[2.5rem] w-full max-w-md overflow-hidden shadow-2xl border-2 border-[#1B2A49]">
             <div className="p-6 bg-[#1B2A49] text-white flex justify-between items-center font-black uppercase text-sm">Nouvelle Absence<X onClick={() => setModalCongeOpen(false)} size={20}/></div>
-            <form onSubmit={async (e) => { e.preventDefault(); const nC = [...conges]; const s = new Date(formData.dateDebut); const en = new Date(formData.dateFin || formData.dateDebut); for (let d = new Date(s); d <= en; d.setDate(d.getDate() + 1)) { nC.push({ id: Math.random(), userId: formData.userId, date: d.toLocaleDateString('en-CA'), category: formData.category, periode: formData.periode, statut: formData.statut }); } setConges(nC); setModalCongeOpen(false); await syncAll(membresBase, nC, notes, evenementsPerso, manualPresence); }} className="p-8 space-y-4">
-              <select className="w-full border-4 border-gray-50 p-5 rounded-2xl font-black" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}><option value="conge">🏝️ Vacances</option><option value="formation">🎓 Formation</option><option value="maladie">🤒 Maladie</option><option value="deplacement">✈️ Déplacement</option></select>
-              <select className="w-full border-4 border-gray-50 p-5 rounded-2xl font-black" value={formData.periode} onChange={e => setFormData({...formData, periode: e.target.value})}><option value="jour">☀️ Journée entière</option><option value="matin">🌅 Matin (0.5)</option><option value="apres-midi">🌇 Après-midi (0.5)</option></select>
-              <div className="grid grid-cols-2 gap-4"><input type="date" className="border-4 border-gray-50 p-5 rounded-2xl font-bold" value={formData.dateDebut} onChange={e => setFormData({...formData, dateDebut: e.target.value})} required/><input type="date" className="border-4 border-gray-50 p-5 rounded-2xl font-bold" value={formData.dateFin} onChange={e => setFormData({...formData, dateFin: e.target.value})}/></div>
-              <select className="w-full border-4 border-gray-50 p-5 rounded-2xl font-black" value={formData.userId} onChange={e => setFormData({...formData, userId: e.target.value})} required><option value="">-- Employé --</option>{membresBase.map(m => <option key={m.id} value={m.id}>{m.nom}</option>)}</select>
+            <form onSubmit={async (e) => { e.preventDefault(); const nC = [...conges]; const s = new Date(formData.dateDebut); const en = new Date(formData.dateFin || formData.dateDebut); for (let d = new Date(s); d <= en; d.setDate(d.getDate() + 1)) { nC.push({ id: Math.random(), userId: formData.userId, date: d.toLocaleDateString('en-CA'), category: formData.category, periode: formData.periode, statut: formData.statut }); } setConges(nC); setModalCongeOpen(false); await syncAll(membresBase, nC, notes, evenementsPerso, manualPresence); }} className="p-8 space-y-4 text-left text-[#1B2A49]">
+              <select className="w-full border-4 border-gray-50 p-5 rounded-2xl font-black text-[#1B2A49]" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}><option value="conge">🏝️ Vacances</option><option value="formation">🎓 Formation</option><option value="maladie">🤒 Maladie</option><option value="deplacement">✈️ Déplacement</option></select>
+              <select className="w-full border-4 border-gray-50 p-5 rounded-2xl font-black text-[#1B2A49]" value={formData.periode} onChange={e => setFormData({...formData, periode: e.target.value})}><option value="jour">☀️ Journée entière</option><option value="matin">🌅 Matin (0.5)</option><option value="apres-midi">🌇 Après-midi (0.5)</option></select>
+              <div className="grid grid-cols-2 gap-4"><input type="date" className="border-4 border-gray-50 p-5 rounded-2xl font-bold text-[#1B2A49]" value={formData.dateDebut} onChange={e => setFormData({...formData, dateDebut: e.target.value})} required/><input type="date" className="border-4 border-gray-50 p-5 rounded-2xl font-bold text-[#1B2A49]" value={formData.dateFin} onChange={e => setFormData({...formData, dateFin: e.target.value})}/></div>
+              <select className="w-full border-4 border-gray-50 p-5 rounded-2xl font-black text-[#1B2A49]" value={formData.userId} onChange={e => setFormData({...formData, userId: e.target.value})} required><option value="">-- Employé --</option>{membresBase.map(m => <option key={m.id} value={m.id}>{m.nom}</option>)}</select>
               <button type="submit" className="w-full bg-[#1B2A49] text-white py-5 rounded-2xl font-black uppercase">Enregistrer</button>
             </form>
           </div>
@@ -345,21 +372,20 @@ const PlanningPersonnel = ({ onNavigate }) => {
       )}
       {modalStaffOpen && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[600] p-4 text-[#1B2A49]">
-          <div className="bg-white rounded-[2rem] w-full max-w-4xl overflow-hidden shadow-2xl">
+          <div className="bg-white rounded-[2rem] w-full max-w-4xl overflow-hidden shadow-2xl text-[#1B2A49]">
             <div className="p-6 bg-[#1B2A49] text-white flex justify-between items-center font-black uppercase text-sm">Équipe<X onClick={() => setModalStaffOpen(false)} className="cursor-pointer" size={20}/></div>
-            <div className="p-8 flex flex-col lg:flex-row gap-8 max-h-[85vh] overflow-y-auto">
-              <form onSubmit={async (e) => {
-                e.preventDefault(); const newId = staffForm.id || Date.now().toString(); const updated = staffForm.id ? membresBase.map(m => m.id === staffForm.id ? staffForm : m) : [...membresBase, { ...staffForm, id: newId }]; setMembresBase(updated); setStaffForm({ id: null, nom: '', role: 'Palefrenier', planning: {}, quotaVacances: 25 }); await syncAll(updated, conges, notes, evenementsPerso, manualPresence);
-              }} className="flex-1 space-y-4 text-left">
-                <div className="grid grid-cols-2 gap-4"><input className="w-full border-2 p-4 rounded-xl font-bold" placeholder="Nom" value={staffForm.nom} onChange={e => setStaffForm({...staffForm, nom: e.target.value})} required/><select className="w-full border-2 p-4 rounded-xl font-bold" value={staffForm.role} onChange={e => setStaffForm({...staffForm, role: e.target.value})}>{["Palefrenier", "Apprentie", "Monitrice", "Aide WE", "Aide ponctuel"].map(r => <option key={r} value={r}>{r}</option>)}</select></div>
-                {staffForm.role !== "Aide ponctuel" ? (<div className="bg-gray-50 p-4 rounded-2xl space-y-4"><span className="text-[10px] uppercase font-black opacity-40 block mb-2">Planning Hebdo :</span><div className="grid grid-cols-1 md:grid-cols-2 gap-2">{JOURS_SEMAINE.map(j => (<div key={j} className="flex items-center justify-between bg-white p-2 rounded-xl border border-gray-100"><span className="text-xs font-bold w-20">{j}</span><div className="flex gap-1">{Object.entries(SHIFT_TYPES).map(([key, val]) => (<button key={key} type="button" onClick={() => setStaffForm({...staffForm, planning: {...staffForm.planning, [j]: key}})} className={`w-8 h-8 rounded-lg text-[9px] font-black uppercase transition-all ${staffForm.planning?.[j] === key ? 'ring-2 ring-black bg-black text-white' : 'bg-gray-100 text-gray-400'}`}>{val.short}</button>))}</div></div>))}</div></div>) : (<div className="bg-blue-50 p-6 rounded-2xl text-center border border-blue-100 flex flex-col items-center gap-2"><UserPlus className="text-blue-500" size={32}/><span className="text-xs font-bold text-blue-800">Aide ponctuel : Pas de planning fixe.</span></div>)}
-                <div className="flex items-center gap-4 pt-4"><div className="flex-1"><span className="text-[9px] uppercase font-black opacity-30 px-2">Quota Vacances (jours)</span><input type="number" className="w-full border-2 p-4 rounded-xl font-bold mt-1" value={staffForm.quotaVacances} onChange={e => setStaffForm({...staffForm, quotaVacances: parseInt(e.target.value)})}/></div><button type="submit" className="flex-1 bg-[#1B2A49] text-white py-4 mt-5 rounded-xl font-black uppercase text-xs shadow-lg">Sauvegarder</button></div>
+            <div className="p-8 flex flex-col lg:flex-row gap-8 max-h-[85vh] overflow-y-auto text-[#1B2A49]">
+              <form onSubmit={async (e) => { e.preventDefault(); const newId = staffForm.id || Date.now().toString(); const updated = staffForm.id ? membresBase.map(m => m.id === staffForm.id ? staffForm : m) : [...membresBase, { ...staffForm, id: newId }]; setMembresBase(updated); setStaffForm({ id: null, nom: '', role: 'Palefrenier', planning: {}, quotaVacances: 25 }); await syncAll(updated, conges, notes, evenementsPerso, manualPresence); }} className="flex-1 space-y-4 text-left text-[#1B2A49]">
+                <input className="w-full border-2 p-4 rounded-xl font-bold text-[#1B2A49]" placeholder="Nom" value={staffForm.nom} onChange={e => setStaffForm({...staffForm, nom: e.target.value})} required/><select className="w-full border-2 p-4 rounded-xl font-bold text-[#1B2A49]" value={staffForm.role} onChange={e => setStaffForm({...staffForm, role: e.target.value})}>{["Palefrenier", "Apprentie", "Monitrice", "Aide WE", "Aide ponctuel"].map(r => <option key={r} value={r}>{r}</option>)}</select>
+                <div className="bg-gray-50 p-4 rounded-2xl space-y-4"><span className="text-[10px] uppercase font-black opacity-40 block mb-2">Planning Hebdo :</span><div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[#1B2A49]">{JOURS_SEMAINE.map(j => (<div key={j} className="flex items-center justify-between bg-white p-2 rounded-xl border border-gray-100 text-[#1B2A49]"><span className="text-xs font-bold w-20">{j}</span><div className="flex gap-1">{Object.entries(SHIFT_TYPES).map(([key, val]) => (<button key={key} type="button" onClick={() => setStaffForm({...staffForm, planning: {...staffForm.planning, [j]: key}})} className={`w-8 h-8 rounded-lg text-[9px] font-black uppercase transition-all ${staffForm.planning?.[j] === key ? 'ring-2 ring-black bg-black text-white' : 'bg-gray-100 text-gray-400'}`}>{val.short}</button>))}</div></div>))}</div></div>
+                <button type="submit" className="w-full bg-[#1B2A49] text-white py-4 mt-5 rounded-xl font-black uppercase text-xs shadow-lg">Sauvegarder</button>
               </form>
-              <div className="lg:w-64 border-l pl-8 space-y-2 overflow-y-auto">{membresBase.map(m => (<div key={m.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-xl"><div className="text-left font-bold text-sm truncate">{m.nom}</div><div className="flex gap-1"><button onClick={() => setStaffForm(m)} className="p-2 text-blue-600 hover:bg-white rounded-lg"><Edit size={16}/></button><button onClick={async () => { if(confirm("Supprimer ?")) { const u = membresBase.filter(x => x.id !== m.id); setMembresBase(u); await syncAll(u, conges, notes, evenementsPerso, manualPresence); }}} className="p-2 text-red-600 hover:bg-white rounded-lg"><Trash2 size={16}/></button></div></div>))}</div>
+              <div className="lg:w-64 border-l pl-8 space-y-2 overflow-y-auto text-[#1B2A49]">{membresBase.map(m => (<div key={m.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-xl"><div className="text-left font-bold text-sm truncate">{m.nom}</div><div className="flex gap-1"><button onClick={() => setStaffForm(m)} className="p-2 text-blue-600 hover:bg-white rounded-lg"><Edit size={16}/></button><button onClick={async () => { if(confirm("Supprimer ?")) { const u = membresBase.filter(x => x.id !== m.id); setMembresBase(u); await syncAll(u, conges, notes, evenementsPerso, manualPresence); }}} className="p-2 text-red-600 hover:bg-white rounded-lg"><Trash2 size={16}/></button></div></div>))}</div>
             </div>
           </div>
         </div>
       )}
+      {modalExportPinOpen && (<div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[1000] p-4 text-center"><div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl border-b-[12px] border-[#1B2A49]"><Download className="mx-auto mb-4 text-[#1B2A49]" size={40} /><form onSubmit={(e) => { e.preventDefault(); if (exportPinInput.toLowerCase() === PIN_EXPORT) { exportToCSV(); setModalExportPinOpen(false); setExportPinInput(""); } else { alert("Code incorrect"); } }} className="space-y-4 text-center text-[#1B2A49]"><input autoFocus type="password" placeholder="PIN EXPORT" className="w-full text-center text-3xl border-b-4 border-[#1B2A49] p-3 outline-none font-black text-[#1B2A49]" value={exportPinInput} onChange={e => setExportPinInput(e.target.value)} /><button type="submit" className="w-full py-4 bg-[#1B2A49] text-white rounded-xl font-bold uppercase text-xs">Exporter</button></form><button onClick={() => setModalExportPinOpen(false)} className="mt-4 text-gray-400 text-xs">Annuler</button></div></div>)}
     </div>
   );
 }
