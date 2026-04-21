@@ -12,7 +12,7 @@ const Accueil = ({ onNavigate }) => {
   const [showAlert, setShowAlert] = useState(false);
   const [alertType, setAlertType] = useState('');
   
-  // États pour la victoire des sorties
+  // États pour la victoire des sorties (Proprios + Club)
   const [sortiesDone, setSortiesDone] = useState(false);
   const [statsSorties, setStatsSorties] = useState({ total: 0, fait: 0 });
 
@@ -34,7 +34,7 @@ const Accueil = ({ onNavigate }) => {
   useEffect(() => {
     fetchDataAndCheckAlerts();
     checkNotifications();
-    checkSortiesGlobal();
+    checkAllSorties(); // Nouvelle fonction combinée
   }, []);
 
   const fetchDataAndCheckAlerts = async () => {
@@ -58,16 +58,36 @@ const Accueil = ({ onNavigate }) => {
     setLoading(false);
   };
 
-  const checkSortiesGlobal = async () => {
+  // LOGIQUE DE CALCUL COMBINÉE (PROPRIOS + CLUB)
+  const checkAllSorties = async () => {
     const jourMajuscule = jourActuel.charAt(0).toUpperCase() + jourActuel.slice(1);
-    const { data } = await supabase.from('planning_sorties').select('last_done_at, est_fait').eq('jour', jourMajuscule);
+    
+    // 1. Récupération Proprios
+    const { data: dataProprios } = await supabase.from('planning_sorties').select('last_done_at').eq('jour', jourMajuscule);
+    
+    // 2. Récupération Club (depuis app_state)
+    const { data: state } = await supabase.from('app_state').select('*');
+    let totalClub = 0;
+    let faitClub = 0;
 
-    if (data && data.length > 0) {
-      const total = data.length;
-      const fait = data.filter(s => s.last_done_at === todayStr || s.est_fait === true).length;
-      setStatsSorties({ total, fait });
-      setSortiesDone(total > 0 && total === fait);
+    if (state) {
+      const map = {}; state.forEach(r => map[r.id] = r.data);
+      const chevauxClub = map.poney_chevaux_club || [];
+      const historique = map.poney_sorties_club_history || [];
+      
+      const chevauxPrevusClub = chevauxClub.filter(c => c.planning?.[jourActuel]);
+      totalClub = chevauxPrevusClub.length;
+      faitClub = chevauxPrevusClub.filter(c => historique.some(h => h.key === `${todayStr}_${c.id}_VALIDATED`)).length;
     }
+
+    const totalProprios = dataProprios?.length || 0;
+    const faitProprios = dataProprios?.filter(s => s.last_done_at === todayStr).length || 0;
+
+    const totalGlobal = totalProprios + totalClub;
+    const faitGlobal = faitProprios + faitClub;
+
+    setStatsSorties({ total: totalGlobal, fait: faitGlobal });
+    setSortiesDone(totalGlobal > 0 && totalGlobal === faitGlobal);
   };
 
   const closeAlert = () => { setShowAlert(false); localStorage.setItem('consignes_last_check', Date.now().toString()); };
@@ -162,34 +182,33 @@ const Accueil = ({ onNavigate }) => {
           </div>
         )}
 
-        {/* Boutons Quick Access */}
-        <div className="grid grid-cols-4 gap-2 mb-10">
-          <button onClick={() => onNavigate('urgences')} className="bg-white p-3 rounded-[24px] flex flex-col items-center gap-2 shadow-sm"><div className="bg-red-500 p-2 rounded-xl text-white"><Phone size={16} /></div><span className="text-[7px] font-black uppercase text-[#1B2A49]">Urgences</span></button>
-          <button onClick={() => handleNavigateWithNotif('soins')} className="bg-white p-3 rounded-[24px] flex flex-col items-center gap-2 relative shadow-sm"><div className="bg-red-100 p-2 rounded-xl text-red-600"><Pill size={16} /></div><span className="text-[7px] font-black uppercase text-[#1B2A49]">Soins</span>{notifSoins && <Badge />}</button>
-          <button onClick={() => onNavigate('planning-sorties')} className="bg-white p-3 rounded-[24px] flex flex-col items-center gap-2 shadow-sm"><div className="bg-[#8DC63F]/20 p-2 rounded-xl text-[#1B2A49]"><DoorOpen size={16} /></div><span className="text-[7px] font-black uppercase text-[#1B2A49] text-center">Sorties</span></button>
-          <button onClick={() => onNavigate('documents')} className="bg-white p-3 rounded-[24px] flex flex-col items-center gap-2 shadow-sm"><div className="bg-[#1B2A49] p-2 rounded-xl text-white"><FileText size={16} /></div><span className="text-[7px] font-black uppercase text-[#1B2A49]">Docs</span></button>
+        {/* Boutons Quick Access (Bouton Sorties supprimé ici car doublon) */}
+        <div className="grid grid-cols-3 gap-2 mb-10">
+          <button onClick={() => onNavigate('urgences')} className="bg-white p-4 rounded-[28px] flex flex-col items-center gap-2 shadow-sm"><div className="bg-red-500 p-2 rounded-xl text-white"><Phone size={18} /></div><span className="text-[8px] font-black uppercase text-[#1B2A49]">Urgences</span></button>
+          <button onClick={() => handleNavigateWithNotif('soins')} className="bg-white p-4 rounded-[28px] flex flex-col items-center gap-2 relative shadow-sm"><div className="bg-red-100 p-2 rounded-xl text-red-600"><Pill size={18} /></div><span className="text-[8px] font-black uppercase text-[#1B2A49]">Soins</span>{notifSoins && <Badge />}</button>
+          <button onClick={() => onNavigate('documents')} className="bg-white p-4 rounded-[28px] flex flex-col items-center gap-2 shadow-sm"><div className="bg-[#1B2A49] p-2 rounded-xl text-white"><FileText size={18} /></div><span className="text-[8px] font-black uppercase text-[#1B2A49]">Docs</span></button>
         </div>
 
         <div className="space-y-10">
-          {/* BANDEAU VICTOIRE HARMONISÉ */}
-          <div onClick={() => onNavigate('planning-sorties')} className={`p-5 rounded-[35px] flex items-center justify-between shadow-sm cursor-pointer transition-all duration-500 border-2 ${sortiesDone ? 'bg-[#8DC63F] border-[#8DC63F] scale-[1.02]' : 'bg-white border-[#8DC63F]'}`}>
+          {/* BANDEAU VICTOIRE COMBINÉ (PROPRIOS + CLUB) */}
+          <div onClick={() => onNavigate('planning-sorties')} className={`p-6 rounded-[40px] flex items-center justify-between shadow-sm cursor-pointer transition-all duration-500 border-2 ${sortiesDone ? 'bg-[#8DC63F] border-[#8DC63F] scale-[1.02]' : 'bg-white border-[#8DC63F]'}`}>
             <div className="flex items-center gap-4 text-left">
-              <div className={`p-2.5 rounded-2xl ${sortiesDone ? 'bg-white text-[#1B2A49]' : 'bg-[#8DC63F]/10 text-[#1B2A49]'}`}>
-                {sortiesDone ? <Star size={24} className="fill-current" /> : <DoorOpen size={24} />}
+              <div className={`p-3 rounded-2xl ${sortiesDone ? 'bg-white text-[#1B2A49]' : 'bg-[#8DC63F]/10 text-[#1B2A49]'}`}>
+                {sortiesDone ? <Star size={26} className="fill-current" /> : <DoorOpen size={26} />}
               </div>
               <div className="flex flex-col">
-                <span className={`text-[14px] font-black uppercase ${sortiesDone ? 'text-white' : 'text-[#1B2A49]'}`}>
-                  {sortiesDone ? '🌟 SORTIES TERMINÉES' : 'SORTIES CHEVAUX'}
+                <span className={`text-[16px] font-black uppercase leading-none ${sortiesDone ? 'text-white' : 'text-[#1B2A49]'}`}>
+                  {sortiesDone ? '🌟 TOUT EST EN ORDRE' : 'SORTIES CHEVAUX'}
                 </span>
-                <span className={`text-[9px] font-bold uppercase ${sortiesDone ? 'text-white/80' : 'text-[#8DC63F]'}`}>
-                  {sortiesDone ? 'Tout est en ordre !' : `Proprios & Club : ${statsSorties.fait} / ${statsSorties.total}`}
+                <span className={`text-[10px] font-bold uppercase mt-1 ${sortiesDone ? 'text-white/80' : 'text-[#8DC63F]'}`}>
+                  {sortiesDone ? 'Proprios & Club terminés !' : `Progression : ${statsSorties.fait} / ${statsSorties.total}`}
                 </span>
               </div>
             </div>
-            <div className={sortiesDone ? 'text-white' : 'text-[#1B2A49]'}><Forward size={20} /></div>
+            <div className={sortiesDone ? 'text-white' : 'text-[#1B2A49]'}><Forward size={24} /></div>
           </div>
 
-          <h2 className="font-black text-[12px] uppercase tracking-[0.3em] text-[#1B2A49] ml-2 -mb-6 italic opacity-50 text-left">Tâches à faire</h2>
+          <h2 className="font-black text-[12px] uppercase tracking-[0.3em] text-[#1B2A49] ml-2 -mb-6 italic opacity-50 text-left">Consignes</h2>
           
           {loading ? ( <div className="text-center p-10 opacity-20 font-black uppercase text-[10px]">Chargement...</div> ) : (
             <>
@@ -211,19 +230,19 @@ const Accueil = ({ onNavigate }) => {
 
               {tasksFuture.length > 0 && (
                 <div className="mt-16 pt-10 border-t-2 border-gray-200/50 opacity-40">
-                  <h3 className="flex items-center gap-2 font-black text-[10px] uppercase tracking-[0.2em] mb-6 ml-2 text-gray-400 text-left"><Forward size={14} /> Prévisions de la semaine</h3>
+                  <h3 className="flex items-center gap-2 font-black text-[10px] uppercase tracking-[0.2em] mb-6 ml-2 text-gray-400 text-left"><Forward size={14} /> Prévisions</h3>
                   <div className="space-y-3">{tasksFuture.map(t => <TaskCard key={t.id} t={t} isActive={false} />)}</div>
                 </div>
               )}
 
               {(tasksArchived.length > 0 || sortiesDone) && (
                 <div className="mt-16 pt-10 border-t-2 border-gray-200/50 pb-10">
-                  <h3 className="flex items-center gap-2 font-black text-[10px] uppercase tracking-[0.2em] mb-6 ml-2 text-gray-400 text-left"><Archive size={14} /> Terminé aujourd'hui</h3>
+                  <h3 className="flex items-center gap-2 font-black text-[10px] uppercase tracking-[0.2em] mb-6 ml-2 text-gray-400 text-left"><Archive size={14} /> Archivé</h3>
                   <div className="space-y-3 text-left">
                     {sortiesDone && (
                         <div className="bg-gray-100/50 p-4 rounded-3xl border-2 border-transparent flex items-center gap-4 opacity-60 scale-[0.98]">
                             <CheckCircle2 className="text-gray-400" size={22} />
-                            <span className="text-[13px] font-black text-gray-400 uppercase tracking-tighter text-left">✅ Sorties Chevaux : OK</span>
+                            <span className="text-[13px] font-black text-gray-400 uppercase tracking-tighter text-left">✅ Sorties Chevaux du jour : OK</span>
                         </div>
                     )}
                     {tasksArchived.map(t => <TaskCard key={t.id} t={t} isActive={true} isArchivedView={true} />)}
@@ -235,7 +254,7 @@ const Accueil = ({ onNavigate }) => {
         </div>
       </main>
 
-      {/* Navigation Footer */}
+      {/* Footer Navigation */}
       <footer className="fixed bottom-0 left-0 right-0 p-8 z-40 pointer-events-none text-center">
         <div className="max-w-xs mx-auto flex items-center justify-around bg-[#1B2A49] p-4 rounded-[32px] shadow-2xl border border-white/10 pointer-events-auto">
           <button onClick={() => onNavigate('accueil')} className="flex flex-col items-center text-[#8DC63F] flex-1"><DoorOpen size={20} /><span className="text-[7px] font-black uppercase mt-1">Tableau</span></button>
@@ -246,23 +265,23 @@ const Accueil = ({ onNavigate }) => {
         </div>
       </footer>
 
-      {/* Modal d'ajout */}
+      {/* Modal Admin */}
       {isAdminOpen && (
         <div className="fixed inset-0 bg-[#1B2A49]/95 z-[100] flex items-end justify-center px-4 backdrop-blur-md">
           <div className="bg-white w-full max-w-md rounded-t-[40px] p-8 pb-10 shadow-2xl text-left overflow-y-auto max-h-[95vh]">
-            <div className="flex justify-between items-center mb-6"><h2 className="font-black text-2xl uppercase text-[#1B2A49]">Nouvelle Tâche</h2><button onClick={() => setIsAdminOpen(false)} className="bg-gray-100 p-2 rounded-full text-gray-400"><X size={20}/></button></div>
+            <div className="flex justify-between items-center mb-6"><h2 className="font-black text-2xl uppercase text-[#1B2A49]">Nouvelle Consigne</h2><button onClick={() => setIsAdminOpen(false)} className="bg-gray-100 p-2 rounded-full text-gray-400"><X size={20}/></button></div>
             <div className="space-y-5">
               <div className="flex items-center gap-3 p-3 bg-red-50 rounded-2xl border-2 border-red-100">
                 <input type="checkbox" checked={isUrgent} onChange={(e) => setIsUrgent(e.target.checked)} className="w-5 h-5 accent-red-500" />
                 <label className="text-red-700 font-black uppercase text-[11px]">🚨 Marquer comme URGENT</label>
               </div>
-              <input type="text" value={newTexte} onChange={(e) => setNewTexte(e.target.value)} placeholder="Nom..." className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold outline-none" />
-              <textarea value={newNotes} onChange={(e) => setNewNotes(e.target.value)} placeholder="Détails..." className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold h-20 outline-none" />
+              <input type="text" value={newTexte} onChange={(e) => setNewTexte(e.target.value)} placeholder="Nom du cheval..." className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold outline-none" />
+              <textarea value={newNotes} onChange={(e) => setNewNotes(e.target.value)} placeholder="Détails de la consigne..." className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold h-20 outline-none" />
               <div className="space-y-2"><label className="text-[9px] font-black uppercase text-gray-400 ml-2">Assigner à :</label><div className="grid grid-cols-3 gap-2">{['Palefreniers', 'Monitrices', 'Tous'].map(a => (<button key={a} onClick={() => setSelectedAttribution(a)} className={`py-3 rounded-xl text-[8px] font-black uppercase transition-all ${selectedAttribution === a ? 'bg-[#1B2A49] text-white' : 'bg-gray-50 text-gray-400'}`}>{a}</button>))}</div></div>
               <div className="grid grid-cols-2 gap-2">{['Sortie', 'Arret', 'Soins', 'Autres'].map(s => <button key={s} onClick={() => setSelectedSection(s)} className={`py-3 rounded-xl text-[9px] font-black uppercase ${selectedSection === s ? 'bg-[#1B2A49] text-white' : 'bg-gray-50 text-gray-400'}`}>{s}</button>)}</div>
               <select value={selectedDay} onChange={(e) => setSelectedDay(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold">
                 <option value="">Aujourd'hui seulement</option>
-                <option value="execution">Ponctuel (jusqu'à exécution)</option>
+                <option value="execution">Jusqu'à exécution</option>
                 <option value="permanent">Jusqu'à rétablissement</option>
                 {joursSemaine.map(j => <option key={j} value={j}>{j}</option>)}
               </select>
