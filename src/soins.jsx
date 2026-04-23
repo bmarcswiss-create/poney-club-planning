@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Plus, X, Trash2, Pill, Clock, Edit3, AlertTriangle, Calendar } from 'lucide-react';
+import { ArrowLeft, Plus, X, Trash2, Pill, Clock, Edit3, AlertTriangle, Calendar as CalendarIcon } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = 'https://lnwvlyswsmtafyoepovq.supabase.co';
@@ -15,14 +15,12 @@ const Soins = ({ onNavigate }) => {
   const [formData, setFormData] = useState({
     cheval: '', traitement: '', dosage: '',
     matin: false, midi: false, soir: false,
+    date_debut: new Date().toISOString().split('T')[0], // Par défaut aujourd'hui
     date_fin: '', notes: ''
   });
 
   useEffect(() => {
     fetchSoins();
-    
-    // RÈGLE DE LA PASTILLE : Dès qu'on ouvre la page, on enregistre l'heure de passage
-    // Cela permet à la pastille rouge de l'accueil de s'éteindre.
     localStorage.setItem('lastVisitSoins', Date.now().toString());
   }, []);
 
@@ -31,8 +29,7 @@ const Soins = ({ onNavigate }) => {
       const { data, error } = await supabase
         .from('soins')
         .select('*')
-        .eq('termine', false)
-        .order('cheval', { ascending: true });
+        .order('date_debut', { ascending: false }); // Les plus récents en haut
       if (!error) setSoins(data || []);
     } catch (err) {
       console.error("Erreur fetch:", err);
@@ -50,6 +47,7 @@ const Soins = ({ onNavigate }) => {
         matin: !!soin.matin,
         midi: !!soin.midi,
         soir: !!soin.soir,
+        date_debut: soin.date_debut || new Date().toISOString().split('T')[0],
         date_fin: soin.date_fin || '',
         notes: soin.notes || ''
       });
@@ -58,6 +56,7 @@ const Soins = ({ onNavigate }) => {
       setFormData({
         cheval: '', traitement: '', dosage: '',
         matin: false, midi: false, soir: false,
+        date_debut: new Date().toISOString().split('T')[0],
         date_fin: '', notes: ''
       });
     }
@@ -75,6 +74,7 @@ const Soins = ({ onNavigate }) => {
       midi: formData.midi,
       soir: formData.soir,
       notes: formData.notes,
+      date_debut: formData.date_debut,
       date_fin: formData.date_fin === "" ? null : formData.date_fin
     };
 
@@ -122,13 +122,19 @@ const Soins = ({ onNavigate }) => {
         <div className="space-y-4">
           {soins.map(s => {
             const isDopant = s.notes?.toLowerCase().includes('dopant');
+            const dateDebut = new Date(s.date_debut);
+            const aujourdhui = new Date();
+            aujourdhui.setHours(0,0,0,0);
+            const estFutur = dateDebut > aujourdhui;
+
             return (
-              <div key={s.id} className={`bg-white p-6 rounded-[35px] shadow-sm border-2 flex flex-col lg:flex-row lg:items-center justify-between gap-6 ${isDopant ? 'border-red-100 bg-red-50/10' : 'border-white'}`}>
+              <div key={s.id} className={`bg-white p-6 rounded-[35px] shadow-sm border-2 flex flex-col lg:flex-row lg:items-center justify-between gap-6 ${isDopant ? 'border-red-100 bg-red-50/10' : 'border-white'} ${estFutur ? 'opacity-60' : ''}`}>
                 
                 <div className="flex-1 text-left">
                   <div className="flex items-center gap-3">
                     <span className="font-black text-xl text-[#1B2A49] uppercase tracking-tighter">{s.cheval}</span>
                     {isDopant && <span className="bg-red-500 text-white text-[9px] font-black px-3 py-1 rounded-full flex items-center gap-1"><AlertTriangle size={12}/> DOPANT</span>}
+                    {estFutur && <span className="bg-blue-100 text-blue-600 text-[9px] font-black px-3 py-1 rounded-full flex items-center gap-1"><CalendarIcon size={12}/> PRÉVU LE {dateDebut.toLocaleDateString()}</span>}
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-3">
                     <span className="text-blue-600 font-black text-sm uppercase">{s.traitement}</span>
@@ -142,22 +148,18 @@ const Soins = ({ onNavigate }) => {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <div className={`flex items-center gap-2 px-4 py-2 rounded-2xl font-black text-[10px] uppercase transition-all ${s.matin ? 'bg-orange-100 text-orange-600 border-orange-200' : 'bg-gray-50 text-gray-200'}`}>
-                    <Clock size={14} /> MATIN
-                  </div>
-                  <div className={`flex items-center gap-2 px-4 py-2 rounded-2xl font-black text-[10px] uppercase transition-all ${s.midi ? 'bg-amber-100 text-amber-600 border-amber-200' : 'bg-gray-50 text-gray-200'}`}>
-                    <Clock size={14} /> MIDI
-                  </div>
-                  <div className={`flex items-center gap-2 px-4 py-2 rounded-2xl font-black text-[10px] uppercase transition-all ${s.soir ? 'bg-indigo-100 text-indigo-600 border-indigo-200' : 'bg-gray-50 text-gray-200'}`}>
-                    <Clock size={14} /> SOIR
-                  </div>
+                  {['matin', 'midi', 'soir'].map(moment => s[moment] && (
+                    <div key={moment} className={`flex items-center gap-2 px-4 py-2 rounded-2xl font-black text-[10px] uppercase ${moment === 'matin' ? 'bg-orange-100 text-orange-600' : moment === 'midi' ? 'bg-amber-100 text-amber-600' : 'bg-indigo-100 text-indigo-600'}`}>
+                      <Clock size={14} /> {moment}
+                    </div>
+                  ))}
                 </div>
 
                 <div className="flex items-center gap-3 border-t lg:border-t-0 pt-4 lg:pt-0">
                   <div className="text-right px-4">
-                    <span className="block text-[8px] font-black uppercase text-gray-400 tracking-widest">Échéance</span>
+                    <span className="block text-[8px] font-black uppercase text-gray-400 tracking-widest">Période</span>
                     <span className="text-[10px] font-black text-[#1B2A49] uppercase">
-                      {s.date_fin ? new Date(s.date_fin).toLocaleDateString() : 'Continu'}
+                      {new Date(s.date_debut).toLocaleDateString()} {s.date_fin ? `au ${new Date(s.date_fin).toLocaleDateString()}` : '(Continu)'}
                     </span>
                   </div>
                   <button onClick={() => handleOpenModal(s)} className="p-4 bg-gray-50 text-gray-400 hover:text-blue-500 rounded-2xl transition-all">
@@ -204,10 +206,17 @@ const Soins = ({ onNavigate }) => {
                   value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} />
               </div>
 
-              <div>
-                <label className="text-[10px] font-black uppercase text-gray-400 ml-2 tracking-widest">Date de fin</label>
-                <input type="date" className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold mt-1 outline-none" 
-                  value={formData.date_fin} onChange={e => setFormData({...formData, date_fin: e.target.value})} />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-2 tracking-widest">Date prévue</label>
+                  <input type="date" className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold mt-1 outline-none text-xs" 
+                    value={formData.date_debut} onChange={e => setFormData({...formData, date_debut: e.target.value})} />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-2 tracking-widest">Date de fin</label>
+                  <input type="date" className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold mt-1 outline-none text-xs" 
+                    value={formData.date_fin} onChange={e => setFormData({...formData, date_fin: e.target.value})} />
+                </div>
               </div>
 
               <button onClick={enregistrerSoin} className="w-full bg-[#1B2A49] text-white py-5 rounded-[25px] font-black uppercase tracking-widest shadow-xl mt-4">
