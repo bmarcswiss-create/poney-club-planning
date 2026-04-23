@@ -194,7 +194,7 @@ const Soins = ({ onNavigate }) => {
         <section>
           <div className="flex items-center gap-3 mb-6 ml-4 text-left">
             <Apple size={20} className="text-[#8DC63F]" />
-            <h2 className="font-black text-xs uppercase tracking-widest text-[#1B2A49]">Compléments & Rations</h2>
+            <h2 className="font-black text-xs uppercase tracking-widest text-[#1B2A49]">Compléments</h2>
           </div>
           <div className="space-y-4">{listeComplements.map(renderSoinCard)}</div>
         </section>
