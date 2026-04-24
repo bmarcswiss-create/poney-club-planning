@@ -106,6 +106,20 @@ const PlanningPersonnel = ({ onNavigate }) => {
     return map;
   }, [conges]);
 
+  const validerCongeIndividuel = async (id) => {
+    const nouveauxConges = conges.map(c => c.id === id ? { ...c, statut: 'valide' } : c);
+    setConges(nouveauxConges);
+    await syncAll(membresBase, nouveauxConges, notes, evenementsPerso, manualPresence);
+  };
+
+  const validerPeriodeConge = async (userId, category) => {
+    const nouveauxConges = conges.map(c => 
+      (String(c.userId) === String(userId) && c.category === category) ? { ...c, statut: 'valide' } : c
+    );
+    setConges(nouveauxConges);
+    await syncAll(membresBase, nouveauxConges, notes, evenementsPerso, manualPresence);
+  };
+
   const getDayPresence = (dateStr) => {
     if (!dateStr || !membresBase) return { total: 0, scheduled: [], ponctuel: [], malades: [], absentsPlanifies: [] };
     const d = new Date(dateStr);
@@ -322,7 +336,6 @@ const PlanningPersonnel = ({ onNavigate }) => {
               })}
            </div>
 
-           {/* LÉGENDE DANS LA SIDEBAR */}
            <div className="pt-6 border-t border-white/10 pb-4">
               <h4 className="text-[9px] font-black uppercase opacity-40 tracking-widest mb-4">Légende</h4>
               <div className="space-y-2">
@@ -371,14 +384,38 @@ const PlanningPersonnel = ({ onNavigate }) => {
         </div>
       </main>
 
-      {/* MODALS (Reste du code identique) */}
+      {/* MODALS */}
       {modalPinOpen && (<div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[1000] p-4 text-center text-[#1B2A49]"><div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl border-b-[12px] border-black text-[#1B2A49]"><Lock className="mx-auto mb-4 text-[#1B2A49]" size={40} /><form onSubmit={(e) => { e.preventDefault(); if (pinInput.toLowerCase() === PIN_ADMIN) { setIsAdmin(true); setModalPinOpen(false); setPinInput(""); } else { alert("Code incorrect"); } }} className="space-y-4 text-center text-[#1B2A49]"><input autoFocus type="password" placeholder="PIN" className="w-full text-center text-3xl border-b-4 border-black p-3 outline-none font-black text-[#1B2A49]" value={pinInput} onChange={e => setPinInput(e.target.value)} /><button type="submit" className="w-full py-4 bg-black text-white rounded-xl font-bold uppercase text-xs">Déverrouiller</button></form><button onClick={() => setModalPinOpen(false)} className="mt-4 text-gray-400 text-xs">Annuler</button></div></div>)}
       {modalChoiceOpen && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[500] p-4 text-[#1B2A49]">
           <div className="bg-white rounded-[2.5rem] w-full max-w-md p-6 space-y-6 border-t-8 border-[#8DC63F] shadow-2xl">
             <h4 className="font-black uppercase text-base border-b pb-2 text-center text-[#1B2A49]">{new Date(modalChoiceOpen).toLocaleDateString('fr-CH', {weekday:'long', day:'numeric', month:'long'})}</h4>
             <div className="grid grid-cols-2 gap-2 bg-gray-50 p-3 rounded-2xl max-h-40 overflow-y-auto">{membresBase.map(m => { const pres = getDayPresence(modalChoiceOpen); const isPresent = pres.scheduled.some(p => p.id === m.id) || pres.ponctuel.some(p => p.id === m.id); const isMalade = pres.malades.some(p => p.id === m.id); return (<label key={m.id} className={`flex items-center gap-2 p-2 hover:bg-white rounded transition-all cursor-pointer ${isMalade ? 'opacity-30' : ''}`}><input type="checkbox" disabled={isMalade} className="w-5 h-5 accent-[#8DC63F]" checked={isPresent} onChange={async () => { const dOver = manualPresence[modalChoiceOpen] || {}; const newMan = { ...manualPresence, [modalChoiceOpen]: { ...dOver, [m.id]: !isPresent } }; setManualPresence(newMan); await syncAll(membresBase, conges, notes, evenementsPerso, newMan); }} /><span className={`text-[11px] font-bold truncate ${isMalade ? 'line-through text-orange-600' : ''}`}>{m.nom}</span></label>) })}</div>
-            {isAdmin && congesParDate[modalChoiceOpen]?.length > 0 && (<div className="space-y-2 border-t pt-4 text-left text-[#1B2A49]"><span className="text-[9px] font-black uppercase opacity-40 text-[#1B2A49]">Absences enregistrées :</span><div className="space-y-2 text-[#1B2A49]">{congesParDate[modalChoiceOpen].map((abs) => { const e = membresBase.find(m => String(m.id) === String(abs.userId)); return (<div key={abs.id} className="flex justify-between items-center bg-gray-100 p-2 rounded-lg text-[#1B2A49]"><span className="text-[10px] font-bold text-[#1B2A49]">{e?.nom} ({abs.category})</span><button onClick={async () => { if(confirm("Supprimer l'absence ?")){ const nC = conges.filter(c => c.id !== abs.id); setConges(nC); await syncAll(membresBase, nC, notes, evenementsPerso, manualPresence); }}} className="text-red-500"><Trash2 size={14}/></button></div>)})}</div></div>)}
+            {isAdmin && congesParDate[modalChoiceOpen]?.length > 0 && (
+              <div className="space-y-2 border-t pt-4 text-left text-[#1B2A49]">
+                <span className="text-[9px] font-black uppercase opacity-40 text-[#1B2A49]">Absences enregistrées :</span>
+                <div className="space-y-2 text-[#1B2A49]">
+                  {congesParDate[modalChoiceOpen].map((abs) => { 
+                    const e = membresBase.find(m => String(m.id) === String(abs.userId)); 
+                    const isProv = abs.statut === 'provisoire';
+                    return (
+                      <div key={abs.id} className="flex flex-col bg-gray-100 p-2 rounded-lg gap-2 text-[#1B2A49]">
+                        <div className="flex justify-between items-center">
+                          <span className="text-[10px] font-bold text-[#1B2A49]">{e?.nom} ({abs.category}) {isProv ? '⏳' : '✅'}</span>
+                          <div className="flex gap-2">
+                            {isProv && <button onClick={() => validerCongeIndividuel(abs.id)} className="text-green-600"><Check size={14}/></button>}
+                            <button onClick={async () => { if(confirm("Supprimer l'absence ?")){ const nC = conges.filter(c => c.id !== abs.id); setConges(nC); await syncAll(membresBase, nC, notes, evenementsPerso, manualPresence); }}} className="text-red-500"><Trash2 size={14}/></button>
+                          </div>
+                        </div>
+                        {isProv && (
+                          <button onClick={() => validerPeriodeConge(abs.userId, abs.category)} className="text-[8px] font-black uppercase bg-white/50 py-1 rounded hover:bg-white text-center text-gray-400">Valider toute la période {abs.category}</button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
             {isAdmin && (<div className="space-y-2 pt-2 border-t mt-2 text-center text-[#1B2A49]"><button onClick={() => { setFormData({ ...formData, dateDebut: modalChoiceOpen, dateFin: modalChoiceOpen, category: 'conge', statut: 'provisoire', periode: 'jour' }); setModalCongeOpen(true); setModalChoiceOpen(null); }} className="w-full py-4 bg-[#8DC63F] text-[#1B2A49] font-black rounded-2xl uppercase text-xs shadow-md">Ajouter Absence</button><div className="grid grid-cols-2 gap-2 text-[#1B2A49]"><button onClick={() => { setModalEvtOpen(true); setModalChoiceOpen(null); }} className="bg-blue-600 text-white py-3 rounded-xl text-[10px] font-black uppercase">Event</button><button onClick={() => { setNoteText(notes[modalChoiceOpen] || ""); setModalNoteOpen(true); setModalChoiceOpen(null); }} className="bg-yellow-400 text-[#1B2A49] py-3 rounded-xl text-[10px] font-black uppercase">Post-it</button></div></div>)}
             <button onClick={() => setModalChoiceOpen(null)} className="w-full text-gray-400 font-bold text-xs uppercase py-2 text-[#1B2A49]">Fermer</button>
           </div>
