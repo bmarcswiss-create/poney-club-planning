@@ -20,15 +20,15 @@ const Meteo = ({ onNavigate }) => {
       <main className="max-w-md mx-auto w-full p-6 mt-4 flex-1">
         {/* Widget Meteoblue - Précision Suisse */}
         <div className="bg-white rounded-[40px] shadow-sm p-4 border-4 border-white overflow-hidden shadow-xl shadow-blue-900/5">
-          <iframe 
-            src="https://www.meteoblue.com/fr/meteo/widget/three/presinge_suisse_2659098?geoloc=fixed&nocurrent=0&noforecast=0&days=4&tempunit=CELSIUS&windunit=KILOMETER_PER_HOUR&layout=light" 
-            frameBorder="0" 
-            scrolling="NO" 
-            allowTransparency="true" 
-            sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox" 
-            style={{ width: '100%', height: '580px' }}
-            title="Météo Presinge"
-          ></iframe>
+        <iframe 
+  src="https://www.meteoblue.com/fr/meteo/widget/three/presinge_suisse_2659098?geoloc=fixed&days=4&tempunit=CELSIUS&windunit=KILOMETER_PER_HOUR&layout=light" 
+  frameBorder="0" 
+  scrolling="NO" 
+  allowTransparency="true" 
+  sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox" 
+  style={{ width: '100%', height: '580px' }}
+  title="Météo Presinge"
+></iframe>
         </div>
 
         {/* Aide à la décision */}
