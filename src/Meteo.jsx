@@ -14,18 +14,18 @@ const Meteo = ({ onNavigate }) => {
         </button>
         <CloudSun size={32} className="text-[#8DC63F] mx-auto mb-2" />
         <h1 className="font-black uppercase text-xl tracking-tighter">Météo Presinge</h1>
-        <p className="text-white/40 text-[9px] font-black uppercase tracking-[0.2em] mt-1">Prévisions 5 jours</p>
+        <p className="text-white/40 text-[9px] font-black uppercase tracking-[0.2em] mt-1">Prévisions locales (GE)</p>
       </header>
 
       <main className="max-w-md mx-auto w-full p-6 mt-4 flex-1">
-        {/* Nouveau Widget Météo - Fixé sur Presinge */}
-        <div className="bg-white rounded-[40px] shadow-sm p-4 border-4 border-white overflow-hidden shadow-xl shadow-blue-900/5 min-h-[400px]">
+        {/* Widget Verrouillé par URL directe - Impossible de sauter sur Paris */}
+        <div className="bg-white rounded-[40px] shadow-sm p-4 border-4 border-white overflow-hidden shadow-xl shadow-blue-900/5 min-h-[450px]">
           <iframe 
-            src="https://www.tameteo.com/get_widget/66567/v2/c1/f:0/m:1/p:1/l:1/h:1/w:1/s:1/t:1" 
+            src="https://www.prevision-meteo.ch/services/html/presinge/square" 
             frameBorder="0" 
             scrolling="NO" 
             allowTransparency="true" 
-            style={{ width: '100%', height: '410px' }}
+            style={{ width: '100%', height: '420px', border: 'none' }}
             title="Météo Presinge"
           ></iframe>
         </div>
