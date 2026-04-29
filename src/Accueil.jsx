@@ -232,7 +232,7 @@ const Accueil = ({ onNavigate }) => {
           {loading ? ( <div className="text-center p-10 opacity-20 font-black uppercase text-[10px]">Chargement...</div> ) : (
             <>
               {[
-                { id: 'Sortie', label: 'CHEVAUX CLUB À SORTIR', icon: DoorOpen, color: 'text-blue-600' },
+                { id: 'Sortie specifique', label: 'CHEVAUX CLUB À SORTIR', icon: DoorOpen, color: 'text-blue-600' },
                 { id: 'Arret', label: 'Chevaux à l\'arrêt', icon: Ban, color: 'text-orange-500' },
                 { id: 'Soins', label: 'Chevaux en soins', icon: HeartPulse, color: 'text-red-500' },
                 { id: 'Autres', label: 'Autres consignes', icon: Info, color: 'text-purple-500' }
