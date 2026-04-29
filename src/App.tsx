@@ -4,8 +4,9 @@ import Soins from './soins';
 import Documents from './Documents';
 import Urgences from './Urgences';
 import PlanningPersonnel from './PlanningPersonnel';
-// 1. MODIFICATION ICI : On importe le nouveau fichier
 import GestionSorties from './GestionSorties'; 
+// 1. IMPORTATION DU COMPOSANT METEO
+import Meteo from './Meteo'; 
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState('accueil');
@@ -16,13 +17,13 @@ export default function App() {
         <Accueil onNavigate={setCurrentPage} />
       )}
 
-      {/* 2. MODIFICATION ICI : On utilise GestionSorties à la place de PlanningSorties */}
       {currentPage === 'planning-sorties' && (
         <GestionSorties onNavigate={setCurrentPage} />
       )}
 
+      {/* Correction pour que Soins puisse naviguer vers d'autres pages si besoin */}
       {currentPage === 'soins' && (
-        <Soins onNavigate={() => setCurrentPage('accueil')} />
+        <Soins onNavigate={setCurrentPage} />
       )}
 
       {currentPage === 'documents' && (
@@ -39,6 +40,11 @@ export default function App() {
 
       {currentPage === 'planning-monitrices' && (
         <PlanningPersonnel onNavigate={setCurrentPage} />
+      )}
+
+      {/* 2. AJOUT DE LA NAVIGATION POUR LA METEO */}
+      {currentPage === 'meteo' && (
+        <Meteo onNavigate={setCurrentPage} />
       )}
     </div>
   );

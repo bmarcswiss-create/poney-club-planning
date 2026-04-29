@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, GraduationCap, Plus, X, CheckCircle2, Circle, Trash2, HeartPulse, DoorOpen, Ban, Phone, FileText, Info, Forward, Pill, Edit3, BellRing, AlertTriangle, Archive, Star } from 'lucide-react';
+import { 
+  Calendar, GraduationCap, Plus, X, CheckCircle2, Circle, Trash2, HeartPulse, 
+  DoorOpen, Ban, Phone, FileText, Info, Forward, Pill, Edit3, BellRing, 
+  AlertTriangle, Archive, Star, ArrowLeft, CloudSun 
+} from 'lucide-react';
 import { supabase } from './supabaseClient';
 
 const LOGO_URL = "https://lnwvlyswsmtafyoepovq.supabase.co/storage/v1/object/public/logo/logo.png";
@@ -12,10 +16,11 @@ const Accueil = ({ onNavigate }) => {
   const [showAlert, setShowAlert] = useState(false);
   const [alertType, setAlertType] = useState('');
   
-  // États pour la victoire des sorties (Proprios + Club)
+  // État pour l'écran "À venir" Monitrices
+  const [showComingSoon, setShowComingSoon] = useState(false);
+
   const [sortiesDone, setSortiesDone] = useState(false);
   const [statsSorties, setStatsSorties] = useState({ total: 0, fait: 0 });
-
   const [notifSoins, setNotifSoins] = useState(false);
   const [notifPlanning, setNotifPlanning] = useState(false);
 
@@ -34,7 +39,7 @@ const Accueil = ({ onNavigate }) => {
   useEffect(() => {
     fetchDataAndCheckAlerts();
     checkNotifications();
-    checkAllSorties(); // Nouvelle fonction combinée
+    checkAllSorties();
   }, []);
 
   const fetchDataAndCheckAlerts = async () => {
@@ -58,34 +63,23 @@ const Accueil = ({ onNavigate }) => {
     setLoading(false);
   };
 
-  // LOGIQUE DE CALCUL COMBINÉE (PROPRIOS + CLUB)
   const checkAllSorties = async () => {
     const jourMajuscule = jourActuel.charAt(0).toUpperCase() + jourActuel.slice(1);
-    
-    // 1. Récupération Proprios
     const { data: dataProprios } = await supabase.from('planning_sorties').select('last_done_at').eq('jour', jourMajuscule);
-    
-    // 2. Récupération Club (depuis app_state)
     const { data: state } = await supabase.from('app_state').select('*');
-    let totalClub = 0;
-    let faitClub = 0;
-
+    let totalClub = 0; let faitClub = 0;
     if (state) {
       const map = {}; state.forEach(r => map[r.id] = r.data);
       const chevauxClub = map.poney_chevaux_club || [];
       const historique = map.poney_sorties_club_history || [];
-      
       const chevauxPrevusClub = chevauxClub.filter(c => c.planning?.[jourActuel]);
       totalClub = chevauxPrevusClub.length;
       faitClub = chevauxPrevusClub.filter(c => historique.some(h => h.key === `${todayStr}_${c.id}_VALIDATED`)).length;
     }
-
     const totalProprios = dataProprios?.length || 0;
     const faitProprios = dataProprios?.filter(s => s.last_done_at === todayStr).length || 0;
-
     const totalGlobal = totalProprios + totalClub;
     const faitGlobal = faitProprios + faitClub;
-
     setStatsSorties({ total: totalGlobal, fait: faitGlobal });
     setSortiesDone(totalGlobal > 0 && totalGlobal === faitGlobal);
   };
@@ -166,15 +160,31 @@ const Accueil = ({ onNavigate }) => {
     );
   };
 
+  // ÉCRAN "COMING SOON" MONITRICE
+  if (showComingSoon) {
+    return (
+      <div className="min-h-screen bg-[#F1F5F9] flex flex-col items-center justify-center p-6 text-center text-[#1B2A49]">
+        <div className="bg-white p-12 rounded-[50px] shadow-xl flex flex-col items-center animate-in zoom-in-95 duration-500">
+           <div className="bg-purple-100 p-6 rounded-[30px] text-purple-600 mb-6"><GraduationCap size={64} /></div>
+           <h2 className="font-black uppercase text-2xl tracking-tighter leading-tight max-w-[250px]">Planning Monitrice à venir dans le futur</h2>
+           <div className="mt-4 w-12 h-1.5 bg-[#8DC63F] rounded-full opacity-30"></div>
+        </div>
+        <footer className="fixed bottom-8 left-0 right-0 p-8 z-40 flex justify-center pointer-events-none">
+          <button onClick={() => setShowComingSoon(false)} className="bg-[#1B2A49] text-white px-8 py-4 rounded-full shadow-2xl pointer-events-auto active:scale-95 transition-all font-black uppercase text-[10px] tracking-widest border border-white/10 flex items-center gap-3"><ArrowLeft size={16} /> Retour Board</button>
+        </footer>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-[#F1F5F9] pb-40 text-left font-sans">
+    <div className="min-h-screen bg-[#F1F5F9] pb-40 text-left font-sans text-[#1B2A49]">
       <header className="fixed top-0 left-0 right-0 bg-[#1B2A49] z-40 px-6 pt-12 pb-8 rounded-b-[45px] shadow-2xl flex flex-col items-center">
         <button onClick={() => { setEditingId(null); setNewTexte(''); setNewNotes(''); setSelectedSection('Sortie'); setSelectedDay(''); setSelectedAttribution('Tous'); setIsUrgent(false); setIsAdminOpen(true); }} className="absolute top-6 right-6 bg-[#8DC63F] text-[#1B2A49] p-3.5 rounded-2xl shadow-lg font-bold"><Plus size={24} /></button>
         <img src={LOGO_URL} alt="Logo" className="h-16 w-16 rounded-full border-4 border-[#8DC63F] mb-3 bg-white" />
         <h1 className="text-white font-black uppercase text-lg tracking-tighter text-center leading-none">Tableau de bord<br/><span className="text-[10px] text-[#8DC63F] font-bold tracking-widest">{dateInfo}</span></h1>
       </header>
 
-      <main className="w-full max-w-md mx-auto px-6 pt-64">
+      <main className="w-full max-w-md mx-auto px-6 pt-64 text-[#1B2A49]">
         {showAlert && (
           <div className="mb-6 bg-[#8DC63F] p-4 rounded-[25px] flex items-center justify-between shadow-lg">
             <div className="flex items-center gap-3"><BellRing size={20} className="text-[#1B2A49]" /><span className="text-[11px] font-black uppercase text-[#1B2A49]">Nouveau : <span className="underline">{alertType}</span> ajouté !</span></div>
@@ -182,33 +192,42 @@ const Accueil = ({ onNavigate }) => {
           </div>
         )}
 
-        {/* Boutons Quick Access (Bouton Sorties supprimé ici car doublon) */}
-        <div className="grid grid-cols-3 gap-2 mb-10">
-          <button onClick={() => onNavigate('urgences')} className="bg-white p-4 rounded-[28px] flex flex-col items-center gap-2 shadow-sm"><div className="bg-red-500 p-2 rounded-xl text-white"><Phone size={18} /></div><span className="text-[8px] font-black uppercase text-[#1B2A49]">Urgences</span></button>
-          <button onClick={() => handleNavigateWithNotif('soins')} className="bg-white p-4 rounded-[28px] flex flex-col items-center gap-2 relative shadow-sm"><div className="bg-red-100 p-2 rounded-xl text-red-600"><Pill size={18} /></div><span className="text-[8px] font-black uppercase text-[#1B2A49]">Soins</span>{notifSoins && <Badge />}</button>
-          <button onClick={() => onNavigate('documents')} className="bg-white p-4 rounded-[28px] flex flex-col items-center gap-2 shadow-sm"><div className="bg-[#1B2A49] p-2 rounded-xl text-white"><FileText size={18} /></div><span className="text-[8px] font-black uppercase text-[#1B2A49]">Docs</span></button>
+        {/* GRILLE DE 4 BOUTONS QUICK ACCESS */}
+        <div className="grid grid-cols-4 gap-2 mb-10 text-[#1B2A49]">
+          <button onClick={() => onNavigate('urgences')} className="bg-white p-3 rounded-[24px] flex flex-col items-center gap-2 shadow-sm active:scale-95 transition-all">
+            <div className="bg-red-500 p-2 rounded-xl text-white"><Phone size={16} /></div>
+            <span className="text-[7px] font-black uppercase text-[#1B2A49]">Urgences</span>
+          </button>
+          
+          <button onClick={() => handleNavigateWithNotif('soins')} className="bg-white p-3 rounded-[24px] flex flex-col items-center gap-2 relative shadow-sm active:scale-95 transition-all">
+            <div className="bg-red-100 p-2 rounded-xl text-red-600"><Pill size={16} /></div>
+            <span className="text-[7px] font-black uppercase text-[#1B2A49]">Soins</span>
+            {notifSoins && <Badge />}
+          </button>
+          
+          <button onClick={() => onNavigate('documents')} className="bg-white p-3 rounded-[24px] flex flex-col items-center gap-2 shadow-sm active:scale-95 transition-all">
+            <div className="bg-[#1B2A49] p-2 rounded-xl text-white"><FileText size={16} /></div>
+            <span className="text-[7px] font-black uppercase text-[#1B2A49]">Docs</span>
+          </button>
+          
+          <button onClick={() => onNavigate('meteo')} className="bg-white p-3 rounded-[24px] flex flex-col items-center gap-2 shadow-sm active:scale-95 transition-all">
+            <div className="bg-blue-500 p-2 rounded-xl text-white shadow-blue-100 shadow-lg">
+              <CloudSun size={16} />
+            </div>
+            <span className="text-[7px] font-black uppercase text-[#1B2A49]">Météo</span>
+          </button>
         </div>
 
         <div className="space-y-10">
-          {/* BANDEAU VICTOIRE COMBINÉ (PROPRIOS + CLUB) */}
           <div onClick={() => onNavigate('planning-sorties')} className={`p-6 rounded-[40px] flex items-center justify-between shadow-sm cursor-pointer transition-all duration-500 border-2 ${sortiesDone ? 'bg-[#8DC63F] border-[#8DC63F] scale-[1.02]' : 'bg-white border-[#8DC63F]'}`}>
-            <div className="flex items-center gap-4 text-left">
-              <div className={`p-3 rounded-2xl ${sortiesDone ? 'bg-white text-[#1B2A49]' : 'bg-[#8DC63F]/10 text-[#1B2A49]'}`}>
-                {sortiesDone ? <Star size={26} className="fill-current" /> : <DoorOpen size={26} />}
-              </div>
-              <div className="flex flex-col">
-                <span className={`text-[16px] font-black uppercase leading-none ${sortiesDone ? 'text-white' : 'text-[#1B2A49]'}`}>
-                  {sortiesDone ? '🌟 TOUT EST EN ORDRE' : 'SORTIES CHEVAUX'}
-                </span>
-                <span className={`text-[10px] font-bold uppercase mt-1 ${sortiesDone ? 'text-white/80' : 'text-[#8DC63F]'}`}>
-                  {sortiesDone ? 'Proprios & Club terminés !' : `Progression : ${statsSorties.fait} / ${statsSorties.total}`}
-                </span>
-              </div>
+            <div className="flex items-center gap-4 text-left text-[#1B2A49]">
+              <div className={`p-3 rounded-2xl ${sortiesDone ? 'bg-white text-[#1B2A49]' : 'bg-[#8DC63F]/10 text-[#1B2A49]'}`}>{sortiesDone ? <Star size={26} className="fill-current" /> : <DoorOpen size={26} />}</div>
+              <div className="flex flex-col"><span className={`text-[16px] font-black uppercase leading-none ${sortiesDone ? 'text-white' : 'text-[#1B2A49]'}`}>{sortiesDone ? '🌟 TOUT EST EN ORDRE' : 'SORTIES CHEVAUX'}</span><span className={`text-[10px] font-bold uppercase mt-1 ${sortiesDone ? 'text-white/80' : 'text-[#8DC63F]'}`}>{sortiesDone ? 'Proprios & Club terminés !' : `Progression : ${statsSorties.fait} / ${statsSorties.total}`}</span></div>
             </div>
             <div className={sortiesDone ? 'text-white' : 'text-[#1B2A49]'}><Forward size={24} /></div>
           </div>
 
-          <h2 className="font-black text-[12px] uppercase tracking-[0.3em] text-[#1B2A49] ml-2 -mb-6 italic opacity-50 text-left">Consignes</h2>
+          <h2 className="font-black text-[12px] uppercase tracking-[0.3em] text-[#1B2A49] ml-2 -mb-6 italic opacity-50">Consignes</h2>
           
           {loading ? ( <div className="text-center p-10 opacity-20 font-black uppercase text-[10px]">Chargement...</div> ) : (
             <>
@@ -227,24 +246,17 @@ const Accueil = ({ onNavigate }) => {
                   </div>
                 );
               })}
-
               {tasksFuture.length > 0 && (
                 <div className="mt-16 pt-10 border-t-2 border-gray-200/50 opacity-40">
                   <h3 className="flex items-center gap-2 font-black text-[10px] uppercase tracking-[0.2em] mb-6 ml-2 text-gray-400 text-left"><Forward size={14} /> Prévisions</h3>
                   <div className="space-y-3">{tasksFuture.map(t => <TaskCard key={t.id} t={t} isActive={false} />)}</div>
                 </div>
               )}
-
               {(tasksArchived.length > 0 || sortiesDone) && (
                 <div className="mt-16 pt-10 border-t-2 border-gray-200/50 pb-10">
                   <h3 className="flex items-center gap-2 font-black text-[10px] uppercase tracking-[0.2em] mb-6 ml-2 text-gray-400 text-left"><Archive size={14} /> Archivé</h3>
-                  <div className="space-y-3 text-left">
-                    {sortiesDone && (
-                        <div className="bg-gray-100/50 p-4 rounded-3xl border-2 border-transparent flex items-center gap-4 opacity-60 scale-[0.98]">
-                            <CheckCircle2 className="text-gray-400" size={22} />
-                            <span className="text-[13px] font-black text-gray-400 uppercase tracking-tighter text-left">✅ Sorties Chevaux du jour : OK</span>
-                        </div>
-                    )}
+                  <div className="space-y-3">
+                    {sortiesDone && <div className="bg-gray-100/50 p-4 rounded-3xl border-2 border-transparent flex items-center gap-4 opacity-60 scale-[0.98]"><CheckCircle2 className="text-gray-400" size={22} /><span className="text-[13px] font-black text-gray-400 uppercase tracking-tighter">✅ Sorties Chevaux du jour : OK</span></div>}
                     {tasksArchived.map(t => <TaskCard key={t.id} t={t} isActive={true} isArchivedView={true} />)}
                   </div>
                 </div>
@@ -261,7 +273,7 @@ const Accueil = ({ onNavigate }) => {
           <div className="h-6 w-[1px] bg-white/10"></div>
           <button onClick={() => handleNavigateWithNotif('planning-ecurie')} className="flex flex-col items-center text-white/40 flex-1 relative"><Calendar size={20} /><span className="text-[7px] font-black uppercase mt-1">Palefreniers</span>{notifPlanning && <Badge />}</button>
           <div className="h-6 w-[1px] bg-white/10"></div>
-          <button onClick={() => onNavigate('planning-monitrices')} className="flex flex-col items-center text-white/40 flex-1"><GraduationCap size={20} /><span className="text-[7px] font-black uppercase mt-1">Monitrices </span></button>
+          <button onClick={() => setShowComingSoon(true)} className="flex flex-col items-center text-white/40 flex-1"><GraduationCap size={20} /><span className="text-[7px] font-black uppercase mt-1">Monitrices</span></button>
         </div>
       </footer>
 
@@ -271,20 +283,12 @@ const Accueil = ({ onNavigate }) => {
           <div className="bg-white w-full max-w-md rounded-t-[40px] p-8 pb-10 shadow-2xl text-left overflow-y-auto max-h-[95vh]">
             <div className="flex justify-between items-center mb-6"><h2 className="font-black text-2xl uppercase text-[#1B2A49]">Nouvelle Consigne</h2><button onClick={() => setIsAdminOpen(false)} className="bg-gray-100 p-2 rounded-full text-gray-400"><X size={20}/></button></div>
             <div className="space-y-5">
-              <div className="flex items-center gap-3 p-3 bg-red-50 rounded-2xl border-2 border-red-100">
-                <input type="checkbox" checked={isUrgent} onChange={(e) => setIsUrgent(e.target.checked)} className="w-5 h-5 accent-red-500" />
-                <label className="text-red-700 font-black uppercase text-[11px]">🚨 Marquer comme URGENT</label>
-              </div>
-              <input type="text" value={newTexte} onChange={(e) => setNewTexte(e.target.value)} placeholder="Nom du cheval..." className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold outline-none" />
+              <div className="flex items-center gap-3 p-3 bg-red-50 rounded-2xl border-2 border-red-100"><input type="checkbox" checked={isUrgent} onChange={(e) => setIsUrgent(e.target.checked)} className="w-5 h-5 accent-red-500" /><label className="text-red-700 font-black uppercase text-[11px]">🚨 Marquer comme URGENT</label></div>
+              <input type="text" value={newTexte} onChange={(e) => setNewTexte(e.target.value)} placeholder="Nom du cheval..." className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold outline-none uppercase" />
               <textarea value={newNotes} onChange={(e) => setNewNotes(e.target.value)} placeholder="Détails de la consigne..." className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold h-20 outline-none" />
               <div className="space-y-2"><label className="text-[9px] font-black uppercase text-gray-400 ml-2">Assigner à :</label><div className="grid grid-cols-3 gap-2">{['Palefreniers', 'Monitrices', 'Tous'].map(a => (<button key={a} onClick={() => setSelectedAttribution(a)} className={`py-3 rounded-xl text-[8px] font-black uppercase transition-all ${selectedAttribution === a ? 'bg-[#1B2A49] text-white' : 'bg-gray-50 text-gray-400'}`}>{a}</button>))}</div></div>
               <div className="grid grid-cols-2 gap-2">{['Sortie', 'Arret', 'Soins', 'Autres'].map(s => <button key={s} onClick={() => setSelectedSection(s)} className={`py-3 rounded-xl text-[9px] font-black uppercase ${selectedSection === s ? 'bg-[#1B2A49] text-white' : 'bg-gray-50 text-gray-400'}`}>{s}</button>)}</div>
-              <select value={selectedDay} onChange={(e) => setSelectedDay(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold">
-                <option value="">Aujourd'hui seulement</option>
-                <option value="execution">Jusqu'à exécution</option>
-                <option value="permanent">Jusqu'à rétablissement</option>
-                {joursSemaine.map(j => <option key={j} value={j}>{j}</option>)}
-              </select>
+              <select value={selectedDay} onChange={(e) => setSelectedDay(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold"><option value="">Aujourd'hui seulement</option><option value="execution">Jusqu'à exécution</option><option value="permanent">Jusqu'à rétablissement</option>{joursSemaine.map(j => <option key={j} value={j}>{j}</option>)}</select>
               <button onClick={enregistrerTache} className="w-full bg-[#8DC63F] text-[#1B2A49] py-5 rounded-3xl font-black uppercase shadow-lg">Enregistrer</button>
             </div>
           </div>
