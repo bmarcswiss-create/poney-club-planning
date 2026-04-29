@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, CloudSun, Wind, Droplets, Thermometer } from 'lucide-react';
+import { ArrowLeft, CloudSun, Wind, Thermometer } from 'lucide-react';
 
 const Meteo = ({ onNavigate }) => {
   return (
@@ -14,39 +14,39 @@ const Meteo = ({ onNavigate }) => {
         </button>
         <CloudSun size={32} className="text-[#8DC63F] mx-auto mb-2" />
         <h1 className="font-black uppercase text-xl tracking-tighter">Météo Presinge</h1>
-        <p className="text-white/40 text-[9px] font-black uppercase tracking-[0.2em] mt-1">Prévisions Écurie</p>
+        <p className="text-white/40 text-[9px] font-black uppercase tracking-[0.2em] mt-1">Données locales</p>
       </header>
 
       <main className="max-w-md mx-auto w-full p-6 mt-4 flex-1">
-        {/* Widget Meteoblue - Précision Suisse */}
+        {/* Widget Verrouillé sur Presinge (ID: 2659098) */}
         <div className="bg-white rounded-[40px] shadow-sm p-4 border-4 border-white overflow-hidden shadow-xl shadow-blue-900/5">
-        <iframe 
-  src="https://www.meteoblue.com/fr/meteo/widget/three/presinge_suisse_2659098?geoloc=fixed&days=4&tempunit=CELSIUS&windunit=KILOMETER_PER_HOUR&layout=light" 
-  frameBorder="0" 
-  scrolling="NO" 
-  allowTransparency="true" 
-  sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox" 
-  style={{ width: '100%', height: '580px' }}
-  title="Météo Presinge"
-></iframe>
+          <iframe 
+            src="https://www.meteoblue.com/fr/meteo/widget/three/presinge_suisse_2659098?geoloc=fixed&nocurrent=0&noforecast=0&days=4&tempunit=CELSIUS&windunit=KILOMETER_PER_HOUR&layout=light" 
+            frameBorder="0" 
+            scrolling="NO" 
+            allowTransparency="true" 
+            sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox" 
+            style={{ width: '100%', height: '590px' }}
+            title="Météo Presinge"
+          ></iframe>
         </div>
 
-        {/* Aide à la décision */}
+        {/* Aide à la décision pour l'écurie */}
         <div className="mt-8 grid grid-cols-2 gap-4">
             <div className="bg-white p-5 rounded-[30px] flex flex-col items-center shadow-sm border border-gray-100">
                 <Wind className="text-blue-400 mb-2" size={20} />
-                <span className="text-[8px] font-black uppercase text-gray-400 tracking-widest">Sols & Paddock</span>
-                <span className="text-[10px] font-bold text-[#1B2A49] mt-1 italic">Vérifier rafales</span>
+                <span className="text-[8px] font-black uppercase text-gray-400 tracking-widest text-center">Sols & Paddock</span>
+                <span className="text-[10px] font-bold text-[#1B2A49] mt-1 italic">Vérifier le vent</span>
             </div>
             <div className="bg-white p-5 rounded-[30px] flex flex-col items-center shadow-sm border border-gray-100">
                 <Thermometer className="text-red-400 mb-2" size={20} />
-                <span className="text-[8px] font-black uppercase text-gray-400 tracking-widest">Couvertures</span>
-                <span className="text-[10px] font-bold text-[#1B2A49] mt-1 italic">Temp. ressentie</span>
+                <span className="text-[8px] font-black uppercase text-gray-400 tracking-widest text-center">Couvertures</span>
+                <span className="text-[10px] font-bold text-[#1B2A49] mt-1 italic">T° ressentie</span>
             </div>
         </div>
       </main>
 
-      {/* CAPSULE DE RETOUR BOARD (Comme Soins/Urgences) */}
+      {/* CAPSULE DE RETOUR BOARD */}
       <footer className="fixed bottom-8 left-0 right-0 p-8 z-40 flex justify-center pointer-events-none">
         <button 
           onClick={() => onNavigate('accueil')}
