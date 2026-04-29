@@ -59,7 +59,6 @@ const Urgences = ({ onNavigate }) => {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-40">
-      {/* Header Alerte - BOUTON PLUS SUPPRIMÉ D'ICI */}
       <header className="bg-red-600 px-6 pt-12 pb-10 rounded-b-[45px] shadow-xl flex flex-col items-center relative text-white">
         <button onClick={() => onNavigate('accueil')} className="absolute top-8 left-6 bg-white/20 p-2 rounded-xl active:scale-90 transition-all">
           <ArrowLeft size={20} />
@@ -87,7 +86,9 @@ const Urgences = ({ onNavigate }) => {
               return (
                 <div key={cat.id} className="mb-10 text-left">
                   <h3 className="flex items-center gap-2 font-black text-[11px] uppercase tracking-[0.2em] text-gray-400 mb-5 ml-2">
-                    <cat.icon size={16} className="text-red-500" /> {cat.id}s
+                    <cat.icon size={16} className="text-red-500" /> 
+                    {/* LOGIQUE DU PLURIEL CORRIGÉE ICI */}
+                    {cat.id === 'Maréchal' ? 'Maréchaux' : `${cat.id}s`}
                   </h3>
                   <div className="space-y-4">
                     {list.map(contact => (
@@ -117,7 +118,6 @@ const Urgences = ({ onNavigate }) => {
               );
             })}
 
-            {/* BOUTON AJOUTER - PLACÉ À LA FIN DE LA LISTE COMME À L'ORIGINE */}
             <div className="flex justify-center mt-4">
               <button 
                 onClick={() => setIsAdminOpen(true)}
@@ -130,7 +130,6 @@ const Urgences = ({ onNavigate }) => {
         )}
       </main>
 
-      {/* Modal d'ajout de contact - Centrée */}
       {isAdminOpen && (
         <div className="fixed inset-0 bg-[#1B2A49]/95 z-50 flex items-center justify-center px-4 backdrop-blur-md">
           <div className="bg-white w-full max-w-md rounded-[40px] p-8 shadow-2xl animate-in zoom-in-95 duration-200">
@@ -169,7 +168,6 @@ const Urgences = ({ onNavigate }) => {
         </div>
       )}
 
-      {/* Navigation basse */}
       <footer className="fixed bottom-8 left-0 right-0 p-8 z-40 flex justify-center pointer-events-none">
         <button 
           onClick={() => onNavigate('accueil')}

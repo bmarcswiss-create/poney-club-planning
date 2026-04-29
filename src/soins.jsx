@@ -108,7 +108,7 @@ const Soins = ({ onNavigate }) => {
 
           <div className="flex-1">
             <div className="flex items-center gap-3 flex-wrap">
-              <span className="font-black text-xl text-[#1B2A49] uppercase tracking-tighter">{s.cheval}</span>
+              <span className="font-black text-xl text-[#1B2A49] uppercase tracking-tighter text-left">{s.cheval}</span>
               
               {s.badge_alerte && (
                 <span className="bg-red-500 text-white text-[9px] font-black px-3 py-1 rounded-full flex items-center gap-1 shadow-sm uppercase">
@@ -131,7 +131,7 @@ const Soins = ({ onNavigate }) => {
             {s.notes && (
               <div className="mt-4 text-[11px] font-bold text-[#1B2A49]/70 bg-gray-50/50 p-4 rounded-2xl border-l-4 border-blue-400 flex items-start gap-2 italic">
                 <span className="text-blue-400 text-lg leading-none opacity-50 font-serif">"</span>
-                <div className="whitespace-pre-line">{s.notes}</div>
+                <div className="whitespace-pre-line text-left">{s.notes}</div>
               </div>
             )}
           </div>
@@ -165,15 +165,14 @@ const Soins = ({ onNavigate }) => {
   const listeComplements = soins.filter(s => s.type === 'complement');
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] pb-32">
+    <div className="min-h-screen bg-[#F8FAFC] pb-40">
       <header className="bg-[#1B2A49] p-8 pt-12 rounded-b-[45px] shadow-xl text-center relative text-white">
-        <button onClick={() => onNavigate('accueil')} className="absolute top-8 left-6 bg-white/10 p-2 rounded-xl"><ArrowLeft size={20}/></button>
         <Pill size={32} className="text-red-400 mx-auto mb-2" />
         <h1 className="font-black uppercase text-xl tracking-tighter">Soins & Compléments</h1>
       </header>
 
       <main className="max-w-5xl mx-auto p-4 mt-4">
-        <button onClick={() => handleOpenModal()} className="w-full bg-white border-2 border-dashed border-gray-200 p-8 rounded-[40px] text-gray-400 font-black text-[10px] mb-8 flex flex-col items-center gap-2 uppercase tracking-widest">
+        <button onClick={() => handleOpenModal()} className="w-full bg-white border-2 border-dashed border-gray-200 p-8 rounded-[40px] text-gray-400 font-black text-[10px] mb-8 flex flex-col items-center gap-2 uppercase tracking-widest active:scale-95 transition-all">
           <Plus size={24}/> AJOUTER UN ÉLÉMENT
         </button>
 
@@ -194,11 +193,21 @@ const Soins = ({ onNavigate }) => {
         <section>
           <div className="flex items-center gap-3 mb-6 ml-4 text-left">
             <Apple size={20} className="text-[#8DC63F]" />
-            <h2 className="font-black text-xs uppercase tracking-widest text-[#1B2A49]">Compléments</h2>
+            <h2 className="font-black text-xs uppercase tracking-widest text-[#1B2A49]">Compléments & Rations</h2>
           </div>
           <div className="space-y-4">{listeComplements.map(renderSoinCard)}</div>
         </section>
       </main>
+
+      {/* CAPSULE DE RETOUR BOARD (Comme Urgences) */}
+      <footer className="fixed bottom-8 left-0 right-0 p-8 z-40 flex justify-center pointer-events-none">
+        <button 
+          onClick={() => onNavigate('accueil')}
+          className="bg-[#1B2A49] text-white px-8 py-4 rounded-full shadow-2xl pointer-events-auto active:scale-95 transition-all font-black uppercase text-[10px] tracking-widest border border-white/10 flex items-center gap-3"
+        >
+          <ArrowLeft size={16} /> Retour Board
+        </button>
+      </footer>
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-[#1B2A49]/95 z-50 flex items-center justify-center p-4 backdrop-blur-md">
@@ -237,19 +246,19 @@ const Soins = ({ onNavigate }) => {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div>
+                <div className="text-left">
                   <label className="text-[8px] font-black uppercase text-gray-400 ml-2 tracking-widest">Date début (Optionnel)</label>
                   <input type="date" className="w-full bg-gray-50 border-2 border-gray-100 rounded-xl p-3 font-bold mt-1 text-xs outline-none" 
                     value={formData.date_debut} onChange={e => setFormData({...formData, date_debut: e.target.value})} />
                 </div>
-                <div>
+                <div className="text-left">
                   <label className="text-[8px] font-black uppercase text-gray-400 ml-2 tracking-widest">Date fin (Optionnel)</label>
                   <input type="date" className="w-full bg-gray-50 border-2 border-gray-100 rounded-xl p-3 font-bold mt-1 text-xs outline-none" 
                     value={formData.date_fin} onChange={e => setFormData({...formData, date_fin: e.target.value})} />
                 </div>
               </div>
 
-              <textarea placeholder="CONSIGNES / ATTENTION..." className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold h-24 outline-none" 
+              <textarea placeholder="CONSIGNES / ATTENTION..." className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold h-24 outline-none text-left" 
                 value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} />
 
               <button onClick={enregistrerSoin} className="w-full bg-[#1B2A49] text-white py-5 rounded-[25px] font-black uppercase tracking-widest shadow-xl mt-4 active:scale-95 transition-transform">
