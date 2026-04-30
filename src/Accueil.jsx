@@ -16,9 +16,7 @@ const Accueil = ({ onNavigate }) => {
   const [showAlert, setShowAlert] = useState(false);
   const [alertType, setAlertType] = useState('');
   
-  // État pour l'écran "À venir" Monitrices
   const [showComingSoon, setShowComingSoon] = useState(false);
-
   const [sortiesDone, setSortiesDone] = useState(false);
   const [statsSorties, setStatsSorties] = useState({ total: 0, fait: 0 });
   const [notifSoins, setNotifSoins] = useState(false);
@@ -27,6 +25,7 @@ const Accueil = ({ onNavigate }) => {
   const [newTexte, setNewTexte] = useState('');
   const [newNotes, setNewNotes] = useState('');
   const [selectedDay, setSelectedDay] = useState('');
+  const [selectedDate, setSelectedDate] = useState(''); // Nouvel état pour la date précise
   const [selectedSection, setSelectedSection] = useState('Sortie');
   const [selectedAttribution, setSelectedAttribution] = useState('Tous');
   const [isUrgent, setIsUrgent] = useState(false);
@@ -47,19 +46,6 @@ const Accueil = ({ onNavigate }) => {
     const lastCheck = parseInt(localStorage.getItem('consignes_last_check') || "0");
     const { data: dataConsignes } = await supabase.from('consignes').select('*').order('est_urgent', { ascending: false }).order('created_at', { ascending: false });
     if (dataConsignes) setConsignes(dataConsignes);
-
-    const tables = [{ name: 'consignes', label: 'Tâche' }, { name: 'soins', label: 'Soin' }, { name: 'urgences', label: 'Urgence' }, { name: 'documents', label: 'Document' }];
-    let mostRecentTime = 0;
-    let mostRecentLabel = '';
-
-    for (const table of tables) {
-      const { data } = await supabase.from(table.name).select('created_at').order('created_at', { ascending: false }).limit(1);
-      if (data?.[0]) {
-        const time = new Date(data[0].created_at).getTime();
-        if (time > mostRecentTime) { mostRecentTime = time; mostRecentLabel = table.label; }
-      }
-    }
-    if (mostRecentTime > lastCheck) { setAlertType(mostRecentLabel); setShowAlert(true); }
     setLoading(false);
   };
 
@@ -84,8 +70,6 @@ const Accueil = ({ onNavigate }) => {
     setSortiesDone(totalGlobal > 0 && totalGlobal === faitGlobal);
   };
 
-  const closeAlert = () => { setShowAlert(false); localStorage.setItem('consignes_last_check', Date.now().toString()); };
-
   const checkNotifications = async () => {
     try {
       const lastVisitSoins = localStorage.getItem('lastVisitSoins') || "0";
@@ -105,9 +89,23 @@ const Accueil = ({ onNavigate }) => {
 
   const enregistrerTache = async () => {
     if (!newTexte.trim()) return;
-    const payload = { texte: newTexte, notes: newNotes, section: selectedSection, jour_semaine: selectedDay || null, attribution: selectedAttribution, est_urgent: isUrgent };
+    
+    // Si une date précise est choisie, on ignore le jour de la semaine
+    const dayToSave = selectedDate ? null : (selectedDay || null);
+    
+    const payload = { 
+        texte: newTexte, 
+        notes: newNotes, 
+        section: selectedSection, 
+        jour_semaine: dayToSave, 
+        date_precise: selectedDate || null, // On stocke la date
+        attribution: selectedAttribution, 
+        est_urgent: isUrgent 
+    };
+
     if (editingId) { await supabase.from('consignes').update(payload).eq('id', editingId); }
     else { await supabase.from('consignes').insert([{ ...payload, est_fait: false, last_done_at: null }]); }
+    
     fetchDataAndCheckAlerts();
     setIsAdminOpen(false);
   };
@@ -128,9 +126,30 @@ const Accueil = ({ onNavigate }) => {
 
   const Badge = () => (<span className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full border-2 border-white"></span>);
 
-  const tasksActive = consignes.filter(t => t.last_done_at !== todayStr && (!t.jour_semaine || t.jour_semaine === jourActuel || t.jour_semaine === 'permanent' || t.jour_semaine === 'execution'));
+  // LOGIQUE DE FILTRAGE AMÉLIORÉE
+  const tasksActive = consignes.filter(t => {
+    const isDoneToday = t.last_done_at === todayStr;
+    if (isDoneToday) return false;
+
+    // Si date précise : est-ce aujourd'hui ?
+    if (t.date_precise) return t.date_precise === todayStr;
+    
+    // Sinon, check classique des jours
+    return !t.jour_semaine || t.jour_semaine === jourActuel || t.jour_semaine === 'permanent' || t.jour_semaine === 'execution';
+  });
+
   const tasksArchived = consignes.filter(t => t.last_done_at === todayStr);
-  const tasksFuture = consignes.filter(t => t.last_done_at !== todayStr && t.jour_semaine && t.jour_semaine !== jourActuel && t.jour_semaine !== 'permanent' && t.jour_semaine !== 'execution');
+
+  const tasksFuture = consignes.filter(t => {
+    const isDoneToday = t.last_done_at === todayStr;
+    if (isDoneToday) return false;
+
+    // Date précise dans le futur
+    if (t.date_precise && t.date_precise > todayStr) return true;
+
+    // Jours de la semaine différents d'aujourd'hui
+    return t.jour_semaine && t.jour_semaine !== jourActuel && t.jour_semaine !== 'permanent' && t.jour_semaine !== 'execution';
+  });
 
   const TaskCard = ({ t, isActive, isArchivedView = false }) => {
     const estFaitAujourdhui = t.last_done_at === todayStr;
@@ -144,14 +163,20 @@ const Accueil = ({ onNavigate }) => {
               <span className={`text-[15px] font-black leading-tight ${estFaitAujourdhui ? 'line-through text-gray-400' : 'text-[#1B2A49]'}`}>{t.texte}</span>
               {!isArchivedView && (
                 <div className="flex items-center gap-2 mt-1">
-                    <span className="text-[9px] font-black uppercase text-[#8DC63F]">{!t.jour_semaine ? "Aujourd'hui" : t.jour_semaine === 'permanent' ? "Rétablissement" : t.jour_semaine === 'execution' ? "Ponctuel" : t.jour_semaine}</span>
+                    <span className="text-[9px] font-black uppercase text-[#8DC63F]">
+                      {t.date_precise ? `Le ${new Date(t.date_precise).toLocaleDateString('fr-FR')}` : 
+                       !t.jour_semaine ? "Aujourd'hui" : 
+                       t.jour_semaine === 'permanent' ? "Rétablissement" : 
+                       t.jour_semaine === 'execution' ? "Unique" : 
+                       `Chaque ${t.jour_semaine}`}
+                    </span>
                     <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${t.attribution === 'Palefreniers' ? 'bg-blue-100 text-blue-700' : t.attribution === 'Monitrices' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'}`}>{t.attribution || 'Tous'}</span>
                 </div>
               )}
             </div>
           </div>
           <div className="flex gap-1">
-            <button onClick={() => { setEditingId(t.id); setNewTexte(t.texte); setNewNotes(t.notes || ''); setSelectedSection(t.section); setSelectedDay(t.jour_semaine || ''); setSelectedAttribution(t.attribution || 'Tous'); setIsUrgent(t.est_urgent || false); setIsAdminOpen(true); }} className="text-gray-200 p-2"><Edit3 size={16} /></button>
+            <button onClick={() => { setEditingId(t.id); setNewTexte(t.texte); setNewNotes(t.notes || ''); setSelectedSection(t.section); setSelectedDay(t.jour_semaine || ''); setSelectedDate(t.date_precise || ''); setSelectedAttribution(t.attribution || 'Tous'); setIsUrgent(t.est_urgent || false); setIsAdminOpen(true); }} className="text-gray-200 p-2"><Edit3 size={16} /></button>
             <button onClick={() => supprimerTache(t.id)} className="text-gray-200 p-2"><Trash2 size={16} /></button>
           </div>
         </div>
@@ -160,60 +185,31 @@ const Accueil = ({ onNavigate }) => {
     );
   };
 
-  // ÉCRAN "COMING SOON" MONITRICE
-  if (showComingSoon) {
-    return (
-      <div className="min-h-screen bg-[#F1F5F9] flex flex-col items-center justify-center p-6 text-center text-[#1B2A49]">
-        <div className="bg-white p-12 rounded-[50px] shadow-xl flex flex-col items-center animate-in zoom-in-95 duration-500">
-           <div className="bg-purple-100 p-6 rounded-[30px] text-purple-600 mb-6"><GraduationCap size={64} /></div>
-           <h2 className="font-black uppercase text-2xl tracking-tighter leading-tight max-w-[250px]">Planning Monitrice à venir dans le futur</h2>
-           <div className="mt-4 w-12 h-1.5 bg-[#8DC63F] rounded-full opacity-30"></div>
-        </div>
-        <footer className="fixed bottom-8 left-0 right-0 p-8 z-40 flex justify-center pointer-events-none">
-          <button onClick={() => setShowComingSoon(false)} className="bg-[#1B2A49] text-white px-8 py-4 rounded-full shadow-2xl pointer-events-auto active:scale-95 transition-all font-black uppercase text-[10px] tracking-widest border border-white/10 flex items-center gap-3"><ArrowLeft size={16} /> Retour Board</button>
-        </footer>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-[#F1F5F9] pb-40 text-left font-sans text-[#1B2A49]">
       <header className="fixed top-0 left-0 right-0 bg-[#1B2A49] z-40 px-6 pt-12 pb-8 rounded-b-[45px] shadow-2xl flex flex-col items-center">
-        <button onClick={() => { setEditingId(null); setNewTexte(''); setNewNotes(''); setSelectedSection('Sortie'); setSelectedDay(''); setSelectedAttribution('Tous'); setIsUrgent(false); setIsAdminOpen(true); }} className="absolute top-6 right-6 bg-[#8DC63F] text-[#1B2A49] p-3.5 rounded-2xl shadow-lg font-bold"><Plus size={24} /></button>
+        <button onClick={() => { setEditingId(null); setNewTexte(''); setNewNotes(''); setSelectedSection('Sortie'); setSelectedDay(''); setSelectedDate(''); setSelectedAttribution('Tous'); setIsUrgent(false); setIsAdminOpen(true); }} className="absolute top-6 right-6 bg-[#8DC63F] text-[#1B2A49] p-3.5 rounded-2xl shadow-lg font-bold"><Plus size={24} /></button>
         <img src={LOGO_URL} alt="Logo" className="h-16 w-16 rounded-full border-4 border-[#8DC63F] mb-3 bg-white" />
         <h1 className="text-white font-black uppercase text-lg tracking-tighter text-center leading-none">Tableau de bord<br/><span className="text-[10px] text-[#8DC63F] font-bold tracking-widest">{dateInfo}</span></h1>
       </header>
 
       <main className="w-full max-w-md mx-auto px-6 pt-64 text-[#1B2A49]">
-        {showAlert && (
-          <div className="mb-6 bg-[#8DC63F] p-4 rounded-[25px] flex items-center justify-between shadow-lg">
-            <div className="flex items-center gap-3"><BellRing size={20} className="text-[#1B2A49]" /><span className="text-[11px] font-black uppercase text-[#1B2A49]">Nouveau : <span className="underline">{alertType}</span> ajouté !</span></div>
-            <button onClick={closeAlert} className="bg-[#1B2A49] text-white p-1.5 rounded-full"><X size={14} /></button>
-          </div>
-        )}
-
-        {/* GRILLE DE 4 BOUTONS QUICK ACCESS */}
         <div className="grid grid-cols-4 gap-2 mb-10 text-[#1B2A49]">
           <button onClick={() => onNavigate('urgences')} className="bg-white p-3 rounded-[24px] flex flex-col items-center gap-2 shadow-sm active:scale-95 transition-all">
             <div className="bg-red-500 p-2 rounded-xl text-white"><Phone size={16} /></div>
             <span className="text-[7px] font-black uppercase text-[#1B2A49]">Urgences</span>
           </button>
-          
           <button onClick={() => handleNavigateWithNotif('soins')} className="bg-white p-3 rounded-[24px] flex flex-col items-center gap-2 relative shadow-sm active:scale-95 transition-all">
             <div className="bg-red-100 p-2 rounded-xl text-red-600"><Pill size={16} /></div>
             <span className="text-[7px] font-black uppercase text-[#1B2A49]">Soins</span>
             {notifSoins && <Badge />}
           </button>
-          
           <button onClick={() => onNavigate('documents')} className="bg-white p-3 rounded-[24px] flex flex-col items-center gap-2 shadow-sm active:scale-95 transition-all">
             <div className="bg-[#1B2A49] p-2 rounded-xl text-white"><FileText size={16} /></div>
             <span className="text-[7px] font-black uppercase text-[#1B2A49]">Docs</span>
           </button>
-          
           <button onClick={() => onNavigate('meteo')} className="bg-white p-3 rounded-[24px] flex flex-col items-center gap-2 shadow-sm active:scale-95 transition-all">
-            <div className="bg-blue-500 p-2 rounded-xl text-white shadow-blue-100 shadow-lg">
-              <CloudSun size={16} />
-            </div>
+            <div className="bg-blue-500 p-2 rounded-xl text-white shadow-blue-100 shadow-lg"><CloudSun size={16} /></div>
             <span className="text-[7px] font-black uppercase text-[#1B2A49]">Météo</span>
           </button>
         </div>
@@ -252,21 +248,11 @@ const Accueil = ({ onNavigate }) => {
                   <div className="space-y-3">{tasksFuture.map(t => <TaskCard key={t.id} t={t} isActive={false} />)}</div>
                 </div>
               )}
-              {(tasksArchived.length > 0 || sortiesDone) && (
-                <div className="mt-16 pt-10 border-t-2 border-gray-200/50 pb-10">
-                  <h3 className="flex items-center gap-2 font-black text-[10px] uppercase tracking-[0.2em] mb-6 ml-2 text-gray-400 text-left"><Archive size={14} /> Archivé</h3>
-                  <div className="space-y-3">
-                    {sortiesDone && <div className="bg-gray-100/50 p-4 rounded-3xl border-2 border-transparent flex items-center gap-4 opacity-60 scale-[0.98]"><CheckCircle2 className="text-gray-400" size={22} /><span className="text-[13px] font-black text-gray-400 uppercase tracking-tighter">✅ Sorties Chevaux du jour : OK</span></div>}
-                    {tasksArchived.map(t => <TaskCard key={t.id} t={t} isActive={true} isArchivedView={true} />)}
-                  </div>
-                </div>
-              )}
             </>
           )}
         </div>
       </main>
 
-      {/* Footer Navigation */}
       <footer className="fixed bottom-0 left-0 right-0 p-8 z-40 pointer-events-none text-center">
         <div className="max-w-xs mx-auto flex items-center justify-around bg-[#1B2A49] p-4 rounded-[32px] shadow-2xl border border-white/10 pointer-events-auto">
           <button onClick={() => onNavigate('accueil')} className="flex flex-col items-center text-[#8DC63F] flex-1"><DoorOpen size={20} /><span className="text-[7px] font-black uppercase mt-1">Tableau</span></button>
@@ -277,18 +263,55 @@ const Accueil = ({ onNavigate }) => {
         </div>
       </footer>
 
-      {/* Modal Admin */}
+      {/* Modal Admin avec SELECT + CALENDRIER */}
       {isAdminOpen && (
         <div className="fixed inset-0 bg-[#1B2A49]/95 z-[100] flex items-end justify-center px-4 backdrop-blur-md">
           <div className="bg-white w-full max-w-md rounded-t-[40px] p-8 pb-10 shadow-2xl text-left overflow-y-auto max-h-[95vh]">
-            <div className="flex justify-between items-center mb-6"><h2 className="font-black text-2xl uppercase text-[#1B2A49]">Nouvelle Consigne</h2><button onClick={() => setIsAdminOpen(false)} className="bg-gray-100 p-2 rounded-full text-gray-400"><X size={20}/></button></div>
+            <div className="flex justify-between items-center mb-6"><h2 className="font-black text-2xl uppercase text-[#1B2A49]">Consigne</h2><button onClick={() => setIsAdminOpen(false)} className="bg-gray-100 p-2 rounded-full text-gray-400"><X size={20}/></button></div>
             <div className="space-y-5">
               <div className="flex items-center gap-3 p-3 bg-red-50 rounded-2xl border-2 border-red-100"><input type="checkbox" checked={isUrgent} onChange={(e) => setIsUrgent(e.target.checked)} className="w-5 h-5 accent-red-500" /><label className="text-red-700 font-black uppercase text-[11px]">🚨 Marquer comme URGENT</label></div>
               <input type="text" value={newTexte} onChange={(e) => setNewTexte(e.target.value)} placeholder="Nom du cheval..." className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold outline-none uppercase" />
               <textarea value={newNotes} onChange={(e) => setNewNotes(e.target.value)} placeholder="Détails de la consigne..." className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold h-20 outline-none" />
-              <div className="space-y-2"><label className="text-[9px] font-black uppercase text-gray-400 ml-2">Assigner à :</label><div className="grid grid-cols-3 gap-2">{['Palefreniers', 'Monitrices', 'Tous'].map(a => (<button key={a} onClick={() => setSelectedAttribution(a)} className={`py-3 rounded-xl text-[8px] font-black uppercase transition-all ${selectedAttribution === a ? 'bg-[#1B2A49] text-white' : 'bg-gray-50 text-gray-400'}`}>{a}</button>))}</div></div>
-              <div className="grid grid-cols-2 gap-2">{['Sortie spécifique', 'Arret', 'Soins', 'Autres'].map(s => <button key={s} onClick={() => setSelectedSection(s)} className={`py-3 rounded-xl text-[9px] font-black uppercase ${selectedSection === s ? 'bg-[#1B2A49] text-white' : 'bg-gray-50 text-gray-400'}`}>{s}</button>)}</div>
-              <select value={selectedDay} onChange={(e) => setSelectedDay(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold"><option value="">Aujourd'hui seulement</option><option value="execution">Jusqu'à exécution</option><option value="permanent">Jusqu'à rétablissement</option>{joursSemaine.map(j => <option key={j} value={j}>{j}</option>)}</select>
+              
+              <div className="space-y-2">
+                <label className="text-[9px] font-black uppercase text-gray-400 ml-2">Assigner à :</label>
+                <div className="grid grid-cols-3 gap-2">{['Palefreniers', 'Monitrices', 'Tous'].map(a => (<button key={a} onClick={() => setSelectedAttribution(a)} className={`py-3 rounded-xl text-[8px] font-black uppercase transition-all ${selectedAttribution === a ? 'bg-[#1B2A49] text-white' : 'bg-gray-50 text-gray-400'}`}>{a}</button>))}</div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[9px] font-black uppercase text-gray-400 ml-2">Fréquence ou Date précise :</label>
+                
+                {/* CALENDRIER POUR DATE PRÉCISE */}
+                <input 
+                    type="date" 
+                    value={selectedDate}
+                    onChange={(e) => { setSelectedDate(e.target.value); if(e.target.value) setSelectedDay(''); }}
+                    className="w-full bg-blue-50 border-2 border-blue-100 rounded-2xl p-4 font-bold text-[#1B2A49] mb-2"
+                />
+
+                {/* OU SÉLECTEUR DE ROUTINE */}
+                <select 
+                  value={selectedDay} 
+                  onChange={(e) => { setSelectedDay(e.target.value); if(e.target.value) setSelectedDate(''); }} 
+                  className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold"
+                >
+                  <option value="">Aujourd'hui seulement</option>
+                  <optgroup label="ROUTINE (Chaque semaine)">
+                    {joursSemaine.map(j => (
+                      <option key={j} value={j}>Chaque {j}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="AUTRES">
+                    <option value="permanent">Tous les jours (Rétablissement)</option>
+                    <option value="execution">Unique (Jusqu'à exécution)</option>
+                  </optgroup>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                {['Sortie spécifique', 'Arret', 'Soins', 'Autres'].map(s => <button key={s} onClick={() => setSelectedSection(s)} className={`py-3 rounded-xl text-[9px] font-black uppercase ${selectedSection === s ? 'bg-[#1B2A49] text-white' : 'bg-gray-50 text-gray-400'}`}>{s}</button>)}
+              </div>
+
               <button onClick={enregistrerTache} className="w-full bg-[#8DC63F] text-[#1B2A49] py-5 rounded-3xl font-black uppercase shadow-lg">Enregistrer</button>
             </div>
           </div>
