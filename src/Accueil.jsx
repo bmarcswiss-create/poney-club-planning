@@ -22,10 +22,11 @@ const Accueil = ({ onNavigate }) => {
   const [notifSoins, setNotifSoins] = useState(false);
   const [notifPlanning, setNotifPlanning] = useState(false);
 
+  // États du formulaire
   const [newTexte, setNewTexte] = useState('');
   const [newNotes, setNewNotes] = useState('');
   const [selectedDay, setSelectedDay] = useState('');
-  const [selectedDate, setSelectedDate] = useState(''); // Nouvel état pour la date précise
+  const [selectedDate, setSelectedDate] = useState(''); 
   const [selectedSection, setSelectedSection] = useState('Sortie');
   const [selectedAttribution, setSelectedAttribution] = useState('Tous');
   const [isUrgent, setIsUrgent] = useState(false);
@@ -36,17 +37,22 @@ const Accueil = ({ onNavigate }) => {
   const dateInfo = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date());
 
   useEffect(() => {
-    fetchDataAndCheckAlerts();
-    checkNotifications();
-    checkAllSorties();
+    refreshAllData();
   }, []);
 
-  const fetchDataAndCheckAlerts = async () => {
+  const refreshAllData = async () => {
     setLoading(true);
-    const lastCheck = parseInt(localStorage.getItem('consignes_last_check') || "0");
+    await Promise.all([
+      fetchDataAndCheckAlerts(),
+      checkNotifications(),
+      checkAllSorties()
+    ]);
+    setLoading(false);
+  };
+
+  const fetchDataAndCheckAlerts = async () => {
     const { data: dataConsignes } = await supabase.from('consignes').select('*').order('est_urgent', { ascending: false }).order('created_at', { ascending: false });
     if (dataConsignes) setConsignes(dataConsignes);
-    setLoading(false);
   };
 
   const checkAllSorties = async () => {
@@ -75,38 +81,29 @@ const Accueil = ({ onNavigate }) => {
       const lastVisitSoins = localStorage.getItem('lastVisitSoins') || "0";
       const lastVisitPlanning = localStorage.getItem('lastVisitPlanning') || "0";
       const { data: lastSoin } = await supabase.from('soins').select('created_at').order('created_at', { ascending: false }).limit(1);
-      if (lastSoin?.[0] && new Date(lastSoin[0].created_at).getTime() > parseInt(lastVisitSoins)) setNotifSoins(true);
+      setNotifSoins(lastSoin?.[0] && new Date(lastSoin[0].created_at).getTime() > parseInt(lastVisitSoins));
       const { data: lastState } = await supabase.from('app_state').select('created_at').order('created_at', { ascending: false }).limit(1);
-      if (lastState?.[0] && new Date(lastState[0].created_at).getTime() > parseInt(lastVisitPlanning)) setNotifPlanning(true);
+      setNotifPlanning(lastState?.[0] && new Date(lastState[0].created_at).getTime() > parseInt(lastVisitPlanning));
     } catch (e) { console.log(e); }
-  };
-
-  const handleNavigateWithNotif = (target) => {
-    if (target === 'soins') localStorage.setItem('lastVisitSoins', Date.now().toString());
-    if (target === 'planning-ecurie') localStorage.setItem('lastVisitPlanning', Date.now().toString());
-    onNavigate(target);
   };
 
   const enregistrerTache = async () => {
     if (!newTexte.trim()) return;
-    
-    // Si une date précise est choisie, on ignore le jour de la semaine
     const dayToSave = selectedDate ? null : (selectedDay || null);
-    
     const payload = { 
-        texte: newTexte, 
-        notes: newNotes, 
-        section: selectedSection, 
-        jour_semaine: dayToSave, 
-        date_precise: selectedDate || null, // On stocke la date
-        attribution: selectedAttribution, 
-        est_urgent: isUrgent 
+      texte: newTexte, 
+      notes: newNotes, 
+      section: selectedSection, 
+      jour_semaine: dayToSave, 
+      date_precise: selectedDate || null, 
+      attribution: selectedAttribution, 
+      est_urgent: isUrgent 
     };
 
     if (editingId) { await supabase.from('consignes').update(payload).eq('id', editingId); }
     else { await supabase.from('consignes').insert([{ ...payload, est_fait: false, last_done_at: null }]); }
     
-    fetchDataAndCheckAlerts();
+    refreshAllData();
     setIsAdminOpen(false);
   };
 
@@ -124,30 +121,18 @@ const Accueil = ({ onNavigate }) => {
     }
   };
 
-  const Badge = () => (<span className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full border-2 border-white"></span>);
-
-  // LOGIQUE DE FILTRAGE AMÉLIORÉE
+  // Filtrage des tâches
   const tasksActive = consignes.filter(t => {
-    const isDoneToday = t.last_done_at === todayStr;
-    if (isDoneToday) return false;
-
-    // Si date précise : est-ce aujourd'hui ?
+    if (t.last_done_at === todayStr) return false;
     if (t.date_precise) return t.date_precise === todayStr;
-    
-    // Sinon, check classique des jours
     return !t.jour_semaine || t.jour_semaine === jourActuel || t.jour_semaine === 'permanent' || t.jour_semaine === 'execution';
   });
 
   const tasksArchived = consignes.filter(t => t.last_done_at === todayStr);
 
   const tasksFuture = consignes.filter(t => {
-    const isDoneToday = t.last_done_at === todayStr;
-    if (isDoneToday) return false;
-
-    // Date précise dans le futur
+    if (t.last_done_at === todayStr) return false;
     if (t.date_precise && t.date_precise > todayStr) return true;
-
-    // Jours de la semaine différents d'aujourd'hui
     return t.jour_semaine && t.jour_semaine !== jourActuel && t.jour_semaine !== 'permanent' && t.jour_semaine !== 'execution';
   });
 
@@ -170,7 +155,6 @@ const Accueil = ({ onNavigate }) => {
                        t.jour_semaine === 'execution' ? "Unique" : 
                        `Chaque ${t.jour_semaine}`}
                     </span>
-                    <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${t.attribution === 'Palefreniers' ? 'bg-blue-100 text-blue-700' : t.attribution === 'Monitrices' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'}`}>{t.attribution || 'Tous'}</span>
                 </div>
               )}
             </div>
@@ -180,7 +164,6 @@ const Accueil = ({ onNavigate }) => {
             <button onClick={() => supprimerTache(t.id)} className="text-gray-200 p-2"><Trash2 size={16} /></button>
           </div>
         </div>
-        {t.notes && !isArchivedView && <div className="mt-2 ml-10 p-2 bg-gray-50/50 rounded-xl border-l-4 border-[#8DC63F]/30 text-[11px] font-medium text-gray-600 italic text-left">{t.notes}</div>}
       </div>
     );
   };
@@ -189,130 +172,97 @@ const Accueil = ({ onNavigate }) => {
     <div className="min-h-screen bg-[#F1F5F9] pb-40 text-left font-sans text-[#1B2A49]">
       <header className="fixed top-0 left-0 right-0 bg-[#1B2A49] z-40 px-6 pt-12 pb-8 rounded-b-[45px] shadow-2xl flex flex-col items-center">
         <button onClick={() => { setEditingId(null); setNewTexte(''); setNewNotes(''); setSelectedSection('Sortie'); setSelectedDay(''); setSelectedDate(''); setSelectedAttribution('Tous'); setIsUrgent(false); setIsAdminOpen(true); }} className="absolute top-6 right-6 bg-[#8DC63F] text-[#1B2A49] p-3.5 rounded-2xl shadow-lg font-bold"><Plus size={24} /></button>
-        <img src={LOGO_URL} alt="Logo" className="h-16 w-16 rounded-full border-4 border-[#8DC63F] mb-3 bg-white" />
+        
+        {/* LOGO RAFRAÎCHISSABLE */}
+        <button 
+          onClick={() => { refreshAllData(); const img = document.getElementById('logo-refresh'); img.classList.add('animate-spin'); setTimeout(() => img.classList.remove('animate-spin'), 600); }} 
+          className="active:scale-90 transition-transform"
+        >
+          <img id="logo-refresh" src={LOGO_URL} alt="Logo" className="h-16 w-16 rounded-full border-4 border-[#8DC63F] mb-3 bg-white" />
+        </button>
+
         <h1 className="text-white font-black uppercase text-lg tracking-tighter text-center leading-none">Tableau de bord<br/><span className="text-[10px] text-[#8DC63F] font-bold tracking-widest">{dateInfo}</span></h1>
       </header>
 
       <main className="w-full max-w-md mx-auto px-6 pt-64 text-[#1B2A49]">
-        <div className="grid grid-cols-4 gap-2 mb-10 text-[#1B2A49]">
-          <button onClick={() => onNavigate('urgences')} className="bg-white p-3 rounded-[24px] flex flex-col items-center gap-2 shadow-sm active:scale-95 transition-all">
-            <div className="bg-red-500 p-2 rounded-xl text-white"><Phone size={16} /></div>
-            <span className="text-[7px] font-black uppercase text-[#1B2A49]">Urgences</span>
-          </button>
-          <button onClick={() => handleNavigateWithNotif('soins')} className="bg-white p-3 rounded-[24px] flex flex-col items-center gap-2 relative shadow-sm active:scale-95 transition-all">
-            <div className="bg-red-100 p-2 rounded-xl text-red-600"><Pill size={16} /></div>
-            <span className="text-[7px] font-black uppercase text-[#1B2A49]">Soins</span>
-            {notifSoins && <Badge />}
-          </button>
-          <button onClick={() => onNavigate('documents')} className="bg-white p-3 rounded-[24px] flex flex-col items-center gap-2 shadow-sm active:scale-95 transition-all">
-            <div className="bg-[#1B2A49] p-2 rounded-xl text-white"><FileText size={16} /></div>
-            <span className="text-[7px] font-black uppercase text-[#1B2A49]">Docs</span>
-          </button>
-          <button onClick={() => onNavigate('meteo')} className="bg-white p-3 rounded-[24px] flex flex-col items-center gap-2 shadow-sm active:scale-95 transition-all">
-            <div className="bg-blue-500 p-2 rounded-xl text-white shadow-blue-100 shadow-lg"><CloudSun size={16} /></div>
-            <span className="text-[7px] font-black uppercase text-[#1B2A49]">Météo</span>
-          </button>
+        {/* GRILLE QUICK ACCESS */}
+        <div className="grid grid-cols-4 gap-2 mb-10">
+          <button onClick={() => onNavigate('urgences')} className="bg-white p-3 rounded-[24px] shadow-sm flex flex-col items-center gap-2"><div className="bg-red-500 p-2 rounded-xl text-white"><Phone size={16} /></div><span className="text-[7px] font-black uppercase">Urgences</span></button>
+          <button onClick={() => onNavigate('soins')} className="bg-white p-3 rounded-[24px] shadow-sm flex flex-col items-center gap-2 relative"><div className="bg-red-100 p-2 rounded-xl text-red-600"><Pill size={16} /></div><span className="text-[7px] font-black uppercase">Soins</span>{notifSoins && <span className="absolute top-2 right-2 h-2 w-2 bg-red-500 rounded-full animate-pulse"/>}</button>
+          <button onClick={() => onNavigate('documents')} className="bg-white p-3 rounded-[24px] shadow-sm flex flex-col items-center gap-2"><div className="bg-[#1B2A49] p-2 rounded-xl text-white"><FileText size={16} /></div><span className="text-[7px] font-black uppercase">Docs</span></button>
+          <button onClick={() => onNavigate('meteo')} className="bg-white p-3 rounded-[24px] shadow-sm flex flex-col items-center gap-2"><div className="bg-blue-500 p-2 rounded-xl text-white"><CloudSun size={16} /></div><span className="text-[7px] font-black uppercase">Météo</span></button>
         </div>
 
         <div className="space-y-10">
-          <div onClick={() => onNavigate('planning-sorties')} className={`p-6 rounded-[40px] flex items-center justify-between shadow-sm cursor-pointer transition-all duration-500 border-2 ${sortiesDone ? 'bg-[#8DC63F] border-[#8DC63F] scale-[1.02]' : 'bg-white border-[#8DC63F]'}`}>
-            <div className="flex items-center gap-4 text-left text-[#1B2A49]">
-              <div className={`p-3 rounded-2xl ${sortiesDone ? 'bg-white text-[#1B2A49]' : 'bg-[#8DC63F]/10 text-[#1B2A49]'}`}>{sortiesDone ? <Star size={26} className="fill-current" /> : <DoorOpen size={26} />}</div>
-              <div className="flex flex-col"><span className={`text-[16px] font-black uppercase leading-none ${sortiesDone ? 'text-white' : 'text-[#1B2A49]'}`}>{sortiesDone ? '🌟 TOUT EST EN ORDRE' : 'SORTIES CHEVAUX'}</span><span className={`text-[10px] font-bold uppercase mt-1 ${sortiesDone ? 'text-white/80' : 'text-[#8DC63F]'}`}>{sortiesDone ? 'Proprios & Club terminés !' : `Progression : ${statsSorties.fait} / ${statsSorties.total}`}</span></div>
+          {/* SORTIES CARD */}
+          <div onClick={() => onNavigate('planning-sorties')} className={`p-6 rounded-[40px] flex items-center justify-between border-2 transition-all ${sortiesDone ? 'bg-[#8DC63F] border-[#8DC63F]' : 'bg-white border-[#8DC63F]'}`}>
+            <div className="flex items-center gap-4 text-left">
+              <div className={`p-3 rounded-2xl ${sortiesDone ? 'bg-white' : 'bg-[#8DC63F]/10'}`}><DoorOpen size={26} /></div>
+              <div className="flex flex-col"><span className={`text-[16px] font-black uppercase ${sortiesDone ? 'text-white' : 'text-[#1B2A49]'}`}>{sortiesDone ? 'TOUT EST FAIT' : 'SORTIES CHEVAUX'}</span><span className={`text-[10px] font-bold ${sortiesDone ? 'text-white/80' : 'text-[#8DC63F]'}`}>{statsSorties.fait} / {statsSorties.total} terminés</span></div>
             </div>
-            <div className={sortiesDone ? 'text-white' : 'text-[#1B2A49]'}><Forward size={24} /></div>
+            <Forward size={24} className={sortiesDone ? 'text-white' : 'text-[#1B2A49]'} />
           </div>
 
-          <h2 className="font-black text-[12px] uppercase tracking-[0.3em] text-[#1B2A49] ml-2 -mb-6 italic opacity-50">Consignes</h2>
-          
-          {loading ? ( <div className="text-center p-10 opacity-20 font-black uppercase text-[10px]">Chargement...</div> ) : (
-            <>
-              {[
-                { id: 'Sortie', label: 'CHEVAUX CLUB À SORTIR', icon: DoorOpen, color: 'text-blue-600' },
-                { id: 'Arret', label: 'Chevaux à l\'arrêt', icon: Ban, color: 'text-orange-500' },
-                { id: 'Soins', label: 'Chevaux en soins', icon: HeartPulse, color: 'text-red-500' },
-                { id: 'Autres', label: 'Autres consignes', icon: Info, color: 'text-purple-500' }
-              ].map(section => {
-                const tasks = tasksActive.filter(t => t.section === section.id);
-                if (tasks.length === 0) return null;
-                return (
-                  <div key={section.id} className="pt-2">
-                    <h3 className={`flex items-center gap-2 font-black text-[10px] uppercase tracking-[0.2em] mb-4 ml-2 text-left ${section.color}`}>{section.id === 'Sortie' ? <span className="bg-blue-600 text-white px-2 py-0.5 rounded-lg text-[10px] mr-1">CLUB</span> : <section.icon size={14} />}{section.label}</h3>
-                    <div className="space-y-3">{tasks.map(t => <TaskCard key={t.id} t={t} isActive={true} />)}</div>
-                  </div>
-                );
-              })}
-              {tasksFuture.length > 0 && (
-                <div className="mt-16 pt-10 border-t-2 border-gray-200/50 opacity-40">
-                  <h3 className="flex items-center gap-2 font-black text-[10px] uppercase tracking-[0.2em] mb-6 ml-2 text-gray-400 text-left"><Forward size={14} /> Prévisions</h3>
-                  <div className="space-y-3">{tasksFuture.map(t => <TaskCard key={t.id} t={t} isActive={false} />)}</div>
-                </div>
-              )}
-            </>
+          {/* LISTE DES CONSIGNES */}
+          {['Sortie', 'Arret', 'Soins', 'Autres'].map(sec => {
+            const tasks = tasksActive.filter(t => t.section === sec);
+            if (tasks.length === 0) return null;
+            return (
+              <div key={sec} className="pt-2">
+                <h3 className="font-black text-[10px] uppercase tracking-[0.2em] mb-4 text-[#1B2A49] opacity-50 ml-2">{sec}</h3>
+                <div className="space-y-3">{tasks.map(t => <TaskCard key={t.id} t={t} isActive={true} />)}</div>
+              </div>
+            );
+          })}
+
+          {tasksFuture.length > 0 && (
+            <div className="mt-10 opacity-40">
+              <h3 className="font-black text-[10px] uppercase tracking-[0.2em] mb-4 ml-2">À Venir</h3>
+              <div className="space-y-3">{tasksFuture.map(t => <TaskCard key={t.id} t={t} isActive={false} />)}</div>
+            </div>
           )}
         </div>
       </main>
 
-      <footer className="fixed bottom-0 left-0 right-0 p-8 z-40 pointer-events-none text-center">
-        <div className="max-w-xs mx-auto flex items-center justify-around bg-[#1B2A49] p-4 rounded-[32px] shadow-2xl border border-white/10 pointer-events-auto">
-          <button onClick={() => onNavigate('accueil')} className="flex flex-col items-center text-[#8DC63F] flex-1"><DoorOpen size={20} /><span className="text-[7px] font-black uppercase mt-1">Tableau</span></button>
-          <div className="h-6 w-[1px] bg-white/10"></div>
-          <button onClick={() => handleNavigateWithNotif('planning-ecurie')} className="flex flex-col items-center text-white/40 flex-1 relative"><Calendar size={20} /><span className="text-[7px] font-black uppercase mt-1">Palefreniers</span>{notifPlanning && <Badge />}</button>
-          <div className="h-6 w-[1px] bg-white/10"></div>
-          <button onClick={() => setShowComingSoon(true)} className="flex flex-col items-center text-white/40 flex-1"><GraduationCap size={20} /><span className="text-[7px] font-black uppercase mt-1">Monitrices</span></button>
+      {/* FOOTER */}
+      <footer className="fixed bottom-0 left-0 right-0 p-8 z-40 text-center pointer-events-none">
+        <div className="max-w-xs mx-auto flex items-center justify-around bg-[#1B2A49] p-4 rounded-[32px] shadow-2xl pointer-events-auto border border-white/10">
+          <button onClick={() => onNavigate('accueil')} className="text-[#8DC63F]"><DoorOpen size={20} /></button>
+          <button onClick={() => onNavigate('planning-ecurie')} className="text-white/40"><Calendar size={20} /></button>
+          <button onClick={() => setShowComingSoon(true)} className="text-white/40"><GraduationCap size={20} /></button>
         </div>
       </footer>
 
-      {/* Modal Admin avec SELECT + CALENDRIER */}
+      {/* MODAL ADMIN */}
       {isAdminOpen && (
         <div className="fixed inset-0 bg-[#1B2A49]/95 z-[100] flex items-end justify-center px-4 backdrop-blur-md">
-          <div className="bg-white w-full max-w-md rounded-t-[40px] p-8 pb-10 shadow-2xl text-left overflow-y-auto max-h-[95vh]">
-            <div className="flex justify-between items-center mb-6"><h2 className="font-black text-2xl uppercase text-[#1B2A49]">Consigne</h2><button onClick={() => setIsAdminOpen(false)} className="bg-gray-100 p-2 rounded-full text-gray-400"><X size={20}/></button></div>
+          <div className="bg-white w-full max-w-md rounded-t-[40px] p-8 pb-10 shadow-2xl max-h-[95vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6"><h2 className="font-black text-2xl uppercase">Nouvelle Consigne</h2><button onClick={() => setIsAdminOpen(false)} className="bg-gray-100 p-2 rounded-full"><X size={20}/></button></div>
             <div className="space-y-5">
-              <div className="flex items-center gap-3 p-3 bg-red-50 rounded-2xl border-2 border-red-100"><input type="checkbox" checked={isUrgent} onChange={(e) => setIsUrgent(e.target.checked)} className="w-5 h-5 accent-red-500" /><label className="text-red-700 font-black uppercase text-[11px]">🚨 Marquer comme URGENT</label></div>
               <input type="text" value={newTexte} onChange={(e) => setNewTexte(e.target.value)} placeholder="Nom du cheval..." className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold outline-none uppercase" />
-              <textarea value={newNotes} onChange={(e) => setNewNotes(e.target.value)} placeholder="Détails de la consigne..." className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold h-20 outline-none" />
+              <textarea value={newNotes} onChange={(e) => setNewNotes(e.target.value)} placeholder="Notes..." className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold h-20 outline-none" />
               
               <div className="space-y-2">
-                <label className="text-[9px] font-black uppercase text-gray-400 ml-2">Assigner à :</label>
-                <div className="grid grid-cols-3 gap-2">{['Palefreniers', 'Monitrices', 'Tous'].map(a => (<button key={a} onClick={() => setSelectedAttribution(a)} className={`py-3 rounded-xl text-[8px] font-black uppercase transition-all ${selectedAttribution === a ? 'bg-[#1B2A49] text-white' : 'bg-gray-50 text-gray-400'}`}>{a}</button>))}</div>
+                <label className="text-[9px] font-black uppercase text-gray-400 ml-2">Date précise (optionnel) :</label>
+                <input type="date" value={selectedDate} onChange={(e) => { setSelectedDate(e.target.value); if(e.target.value) setSelectedDay(''); }} className="w-full bg-blue-50 border-2 border-blue-100 rounded-2xl p-4 font-bold" />
               </div>
 
               <div className="space-y-2">
-                <label className="text-[9px] font-black uppercase text-gray-400 ml-2">Fréquence ou Date précise :</label>
-                
-                {/* CALENDRIER POUR DATE PRÉCISE */}
-                <input 
-                    type="date" 
-                    value={selectedDate}
-                    onChange={(e) => { setSelectedDate(e.target.value); if(e.target.value) setSelectedDay(''); }}
-                    className="w-full bg-blue-50 border-2 border-blue-100 rounded-2xl p-4 font-bold text-[#1B2A49] mb-2"
-                />
-
-                {/* OU SÉLECTEUR DE ROUTINE */}
-                <select 
-                  value={selectedDay} 
-                  onChange={(e) => { setSelectedDay(e.target.value); if(e.target.value) setSelectedDate(''); }} 
-                  className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold"
-                >
+                <label className="text-[9px] font-black uppercase text-gray-400 ml-2">Ou Récurrence :</label>
+                <select value={selectedDay} onChange={(e) => { setSelectedDay(e.target.value); if(e.target.value) setSelectedDate(''); }} className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold">
                   <option value="">Aujourd'hui seulement</option>
-                  <optgroup label="ROUTINE (Chaque semaine)">
-                    {joursSemaine.map(j => (
-                      <option key={j} value={j}>Chaque {j}</option>
-                    ))}
+                  <optgroup label="ROUTINE">
+                    {joursSemaine.map(j => <option key={j} value={j}>Chaque {j}</option>)}
                   </optgroup>
-                  <optgroup label="AUTRES">
-                    <option value="permanent">Tous les jours (Rétablissement)</option>
-                    <option value="execution">Unique (Jusqu'à exécution)</option>
-                  </optgroup>
+                  <option value="permanent">Tous les jours</option>
                 </select>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
-                {['Sortie spécifique', 'Arret', 'Soins', 'Autres'].map(s => <button key={s} onClick={() => setSelectedSection(s)} className={`py-3 rounded-xl text-[9px] font-black uppercase ${selectedSection === s ? 'bg-[#1B2A49] text-white' : 'bg-gray-50 text-gray-400'}`}>{s}</button>)}
+                {['Sortie', 'Arret', 'Soins', 'Autres'].map(s => <button key={s} onClick={() => setSelectedSection(s)} className={`py-3 rounded-xl text-[9px] font-black uppercase ${selectedSection === s ? 'bg-[#1B2A49] text-white' : 'bg-gray-50 text-gray-400'}`}>{s}</button>)}
               </div>
 
-              <button onClick={enregistrerTache} className="w-full bg-[#8DC63F] text-[#1B2A49] py-5 rounded-3xl font-black uppercase shadow-lg">Enregistrer</button>
+              <button onClick={enregistrerTache} className="w-full bg-[#8DC63F] text-[#1B2A49] py-5 rounded-3xl font-black uppercase shadow-lg active:scale-95 transition-all">Enregistrer</button>
             </div>
           </div>
         </div>
