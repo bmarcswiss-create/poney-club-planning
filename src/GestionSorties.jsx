@@ -43,34 +43,46 @@ const GestionSorties = ({ onNavigate }) => {
     setLoading(false);
   };
 
+  // FONCTION DE NETTOYAGE (Anti-accents et caractères spéciaux)
+  const cleanString = (str) => {
+    if (!str) return "";
+    return str
+      .normalize("NFD") // Sépare l'accent de la lettre
+      .replace(/[\u0300-\u036f]/g, "") // Supprime l'accent
+      .toUpperCase()
+      .trim();
+  };
+
   const handleAjouter = async () => {
-    if (!newHorse.nom.trim() || newHorse.joursSelectionnes.length === 0) {
+    const cleanNom = cleanString(newHorse.nom);
+    
+    if (!cleanNom || newHorse.joursSelectionnes.length === 0) {
         alert("Nom et jours requis.");
         return;
     }
     
     if (activeTab === 'proprios') {
       if (editingId) {
-        const nameToDelete = originalName || newHorse.nom.toUpperCase();
+        const nameToDelete = cleanString(originalName) || cleanNom;
         await supabase.from('planning_sorties').delete().eq('nom_cheval', nameToDelete);
       }
 
       const inserts = newHorse.joursSelectionnes.map(j => ({
-        nom_cheval: newHorse.nom.toUpperCase(),
+        nom_cheval: cleanNom,
         jour: j,
-        lieu: newHorse.lieu
+        lieu: cleanString(newHorse.lieu) // Nettoyage du lieu aussi
       }));
       await supabase.from('planning_sorties').insert(inserts);
     } else {
       let newC;
       if (editingId) {
         newC = chevauxClub.map(c => c.id === editingId ? { 
-          ...c, nom: newHorse.nom.toUpperCase(), 
+          ...c, nom: cleanNom, 
           planning: newHorse.joursSelectionnes.reduce((acc, j) => ({...acc, [j]: 'Sortie'}), {}) 
         } : c);
       } else {
         newC = [...chevauxClub, { 
-          id: Date.now(), nom: newHorse.nom.toUpperCase(), 
+          id: Date.now(), nom: cleanNom, 
           planning: newHorse.joursSelectionnes.reduce((acc, j) => ({...acc, [j]: 'Sortie'}), {}) 
         }];
       }
@@ -86,16 +98,14 @@ const GestionSorties = ({ onNavigate }) => {
   };
 
   const handleEdit = (horse) => {
-    // Changement de vue immédiat
     setView('semaine');
     
-    const rawNom = horse?.nom_cheval || horse?.nom || "";
-    const nom = rawNom.toUpperCase();
-    
+    const nom = cleanString(horse?.nom_cheval || horse?.nom);
     let joursSelectionnes = [];
+    
     if (activeTab === 'proprios') {
       joursSelectionnes = chevauxProprios
-        .filter(h => h.nom_cheval?.toUpperCase() === nom)
+        .filter(h => cleanString(h.nom_cheval) === nom)
         .map(h => h.jour?.toLowerCase());
     } else {
       joursSelectionnes = Object.keys(horse?.planning || {}).filter(j => horse.planning[j]);
@@ -233,7 +243,6 @@ const GestionSorties = ({ onNavigate }) => {
                            <span className="text-[10px] font-black text-[#1B2A49] uppercase">{s.nom_cheval || s.nom}</span>
                            {activeTab === 'proprios' && s.lieu && <span className="text-[8px] opacity-40 font-bold uppercase italic">{s.lieu}</span>}
                            
-                           {/* BOUTON MODIFIER RENFORCÉ */}
                            <button 
                              onClick={(e) => { e.stopPropagation(); handleEdit(s); }} 
                              className="relative z-10 p-2 bg-[#8DC63F]/10 rounded-lg text-[#8DC63F] hover:bg-[#8DC63F] hover:text-white transition-all ml-2"
